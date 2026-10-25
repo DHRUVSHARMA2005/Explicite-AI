@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     OLLAMA_MODEL: str = "llama3"
     LLM_TIMEOUT_SECONDS: int = 30
     LLM_MAX_TOKENS: int = 512            # response tokens per AI call
+    LLM_FIX_MAX_TOKENS: int = 2048       # higher limit for fix generation (code output)
+
+    # Git repository analysis
+    GIT_CLONE_TIMEOUT_SECONDS: int = 120   # max seconds for git clone
+    GIT_MAX_REPO_MB: int = 100             # max source size after clone (MB)
+    GIT_MAX_FILE_COUNT: int = 5000         # max files in cloned repo
 
     @property
     def allowed_origins(self) -> list[str]:

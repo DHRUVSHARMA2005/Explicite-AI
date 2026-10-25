@@ -1,23 +1,25 @@
 """
 Analysis endpoints.
 
-POST /projects/{project_id}/analyse   — submit ZIP, start job (202)
-GET  /projects/{project_id}/analyse   — list jobs (most recent first)
+POST /projects/{project_id}/analyse         — submit ZIP, start job (202)
+POST /projects/{project_id}/analyse/git     — submit Git repo URL, start job (202)
+GET  /projects/{project_id}/analyse         — list jobs (most recent first)
 GET  /projects/{project_id}/analyse/{job_id} — job status
 """
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Body, File, HTTPException, UploadFile
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbDep, get_project_membership
 from app.config import settings
 from app.models.analysis import AnalysisJob
-from app.schemas.analysis import AnalysisJobStatus
+from app.schemas.analysis import AnalysisJobStatus, GitAnalysisRequest
 from app.schemas.auth import UserPreferences
 from app.services.archive import ArchiveError, validate_and_extract
-from app.services.job_runner import run_analysis_job
+from app.services.git_service import GitServiceError, GitUrlError, validate_branch, validate_repo_url
+from app.services.job_runner import run_analysis_job, run_git_analysis_job
 
 router = APIRouter(tags=["analysis"])
 
@@ -45,6 +47,9 @@ def _job_to_status(job: AnalysisJob) -> AnalysisJobStatus:
         vulnerabilities_count=job.vulnerabilities_count,
         code_smells_count=job.code_smells_count,
         security_hotspots_count=job.security_hotspots_count,
+        source_branch=job.source_branch,
+        source_revision=job.source_revision,
+        repo_url=job.repo_url,
     )
 
 
@@ -109,6 +114,74 @@ async def submit_analysis(
         job_id,
         str(upload_base),
         timeout,
+        prefs.quality_gate_max_bugs,
+        prefs.quality_gate_max_vulnerabilities,
+        prefs.quality_gate_coverage_threshold > 0,
+        prefs.quality_gate_coverage_threshold,
+    )
+
+    return _job_to_status(job)
+
+
+@router.post(
+    "/projects/{project_id}/analyse/git",
+    response_model=AnalysisJobStatus,
+    status_code=202,
+)
+async def submit_git_analysis(
+    project_id: uuid.UUID,
+    body: GitAnalysisRequest,
+    current_user: CurrentUser,
+    db: DbDep,
+    background_tasks: BackgroundTasks,
+) -> AnalysisJobStatus:
+    """
+    Validate a public HTTPS Git repository URL and start an analysis job.
+    Returns the queued job immediately (202); cloning and analysis run in the background.
+    Developer role or higher required.
+
+    Security: only public HTTPS URLs are accepted; SSRF protection is applied
+    (DNS resolution validated against private/loopback ranges).
+    """
+    project, _ = await get_project_membership(
+        project_id, current_user, db, min_role="developer"
+    )
+
+    # Validate URL and branch name — surface user-facing errors as 422
+    try:
+        clean_url = validate_repo_url(body.repo_url)
+    except GitUrlError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except GitServiceError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    try:
+        clean_branch = validate_branch(body.branch)
+    except GitUrlError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    job_id = uuid.uuid4()
+    dest_dir = Path(settings.UPLOAD_DIR) / str(project_id) / str(job_id)
+
+    job = AnalysisJob(
+        id=job_id,
+        project_id=project_id,
+        status="queued",
+        source_branch=clean_branch,
+        repo_url=clean_url,
+    )
+    db.add(job)
+    await db.flush()
+    await db.commit()
+
+    prefs = UserPreferences.model_validate(current_user.preferences or {})
+    background_tasks.add_task(
+        run_git_analysis_job,
+        job_id,
+        clean_url,
+        clean_branch,
+        str(dest_dir),
+        settings.ANALYSIS_TIMEOUT_SECONDS,
         prefs.quality_gate_max_bugs,
         prefs.quality_gate_max_vulnerabilities,
         prefs.quality_gate_coverage_threshold > 0,

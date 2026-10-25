@@ -66,8 +66,11 @@ class KeyMetrics(BaseModel):
 class SupportingMetrics(BaseModel):
     coverage_pct: float | None
     coverage_target_pct: float | None
+    coverage_message: str | None = None
     duplications_pct: float | None
+    duplications_message: str | None = None
     technical_debt_display: str | None
+    technical_debt_is_estimate: bool = False
     maintainability_rating: str | None
 
 

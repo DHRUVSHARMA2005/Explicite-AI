@@ -60,6 +60,9 @@ class AnalysisJob(Base):
     # Internal path to extracted source — never exposed in API responses
     source_path: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Git repository metadata — populated for repo-based analysis jobs
+    repo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(

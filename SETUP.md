@@ -9,6 +9,7 @@
 | pnpm | 9+ | `npm install -g pnpm` |
 | PostgreSQL | 16 | Docker recommended |
 | Semgrep | 1.181.0 | `pip install semgrep` |
+| **git** | **2.x+** | **Required for Git repository analysis** |
 | Docker (optional) | 27+ | For the DB container |
 
 ---
@@ -75,7 +76,7 @@ Verify the migration chain reaches the current head:
 alembic current
 ```
 
-Expected output ends with `(head)` on revision `4df931a7000b`.
+Expected output ends with `(head)` on revision `c1d2e3f4a5b6`.
 
 ### Seed development data
 
@@ -149,7 +150,8 @@ OLLAMA_MODEL=llama3
 - **Background jobs do not survive server restart.** Any job in `running` state when the server stops is reset to `failed` on the next startup. Resubmit the source archive to re-run.
 - **No rate limiting.** Deploy behind a reverse proxy (nginx, Caddy) and add rate limiting there for any internet-facing deployment.
 - **JWT has no server-side revocation.** Tokens expire after `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` (default 60 minutes). Log out clears the token from `sessionStorage` on the client only.
-- **CodeAnalysis screen** shows demo data — not connected to live job metrics in this release.
+- **Git repository analysis** requires `git` to be installed on the server and on `PATH`. Analysis of private repositories is not supported; only public HTTPS URLs are accepted.
+- **SSRF protection (DNS rebinding):** The server validates the repository hostname via DNS before cloning, but DNS rebinding attacks are not fully mitigated at the application layer. For production deployments, configure the server's egress firewall to block RFC 1918 ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8).
 
 ---
 

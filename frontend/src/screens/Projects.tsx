@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useNav } from "../App"
+import { FolderIcon, AnalyzeIcon, UploadIcon } from "../components/Icons"
 import {
   apiGetProjects,
   apiCreateProject,
@@ -10,25 +11,23 @@ import {
   ApiError,
 } from "../lib/api"
 
-// ─── Create project modal ─────────────────────────────────────────────────────
+// ─── Create modal ─────────────────────────────────────────────────────────────
 
 interface CreateModalProps {
   token: string
   onCreated: (project: ApiProject) => void
   onClose: () => void
+  defaultBranch?: string
 }
 
-function CreateProjectModal({ token, onCreated, onClose, defaultBranch = "main" }: CreateModalProps & { defaultBranch?: string }) {
+function CreateProjectModal({ token, onCreated, onClose, defaultBranch = "main" }: CreateModalProps) {
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   const [branch, setBranch] = useState(defaultBranch)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const nameRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    nameRef.current?.focus()
-  }, [])
+  useEffect(() => { nameRef.current?.focus() }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -46,79 +45,47 @@ function CreateProjectModal({ token, onCreated, onClose, defaultBranch = "main" 
       onCreated(created)
     } catch (err) {
       setSaving(false)
-      if (err instanceof ApiError) {
-        setError(err.message || "Failed to create project.")
-      } else {
-        setError(err instanceof Error ? err.message : "Failed to create project.")
-      }
+      setError(err instanceof ApiError ? (err.message || "Failed to create project.") : (err instanceof Error ? err.message : "Failed to create project."))
     }
   }
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
-        <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
-          <h3 className="font-semibold text-gray-900 text-sm">Create New Project</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+      <div
+        className="w-full max-w-md mx-4 rounded-xl shadow-2xl"
+        style={{ backgroundColor: "var(--xm-bg-elevated)", border: "1px solid var(--xm-border)" }}
+      >
+        <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--xm-border)" }}>
+          <h3 className="text-sm font-semibold" style={{ color: "var(--xm-tx-primary)" }}>Create New Project</h3>
+          <button onClick={onClose} className="text-lg leading-none" style={{ color: "var(--xm-tx-muted)" }}>×</button>
         </div>
         <form onSubmit={handleSubmit} className="px-5 py-4 space-y-4">
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Project name <span className="text-red-500">*</span>
+            <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--xm-tx-secondary)" }}>
+              Project name <span style={{ color: "var(--xm-err)" }}>*</span>
             </label>
-            <input
-              ref={nameRef}
-              type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              maxLength={255}
-              placeholder="e.g. Student Management System"
-              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-            />
+            <input ref={nameRef} type="text" value={name} onChange={e => setName(e.target.value)} maxLength={255} placeholder="e.g. Student Management System" className="xm-input" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Description <span className="text-gray-400">(optional)</span></label>
-            <textarea
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              rows={2}
-              maxLength={2000}
-              placeholder="Short description of the project"
-              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 resize-none"
-            />
+            <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--xm-tx-secondary)" }}>Description <span style={{ color: "var(--xm-tx-muted)" }}>(optional)</span></label>
+            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} maxLength={2000} placeholder="Short description" className="xm-input resize-none" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Default branch</label>
-            <input
-              type="text"
-              value={branch}
-              onChange={e => setBranch(e.target.value)}
-              placeholder="main"
-              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-            />
+            <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--xm-tx-secondary)" }}>Default branch</label>
+            <input type="text" value={branch} onChange={e => setBranch(e.target.value)} placeholder="main" className="xm-input" />
           </div>
           {error && (
-            <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</div>
+            <div className="text-xs rounded px-3 py-2.5" style={{ backgroundColor: "var(--xm-err-sub)", color: "var(--xm-err)", border: "1px solid color-mix(in srgb, var(--xm-err) 40%, transparent)" }}>
+              {error}
+            </div>
           )}
           <div className="flex justify-end gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={saving}
-              className="px-3 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-50 disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {saving ? "Creating…" : "Create Project"}
-            </button>
+            <button type="button" onClick={onClose} disabled={saving} className="xm-btn xm-btn-secondary">Cancel</button>
+            <button type="submit" disabled={saving} className="xm-btn xm-btn-primary">{saving ? "Creating…" : "Create Project"}</button>
           </div>
         </form>
       </div>
@@ -126,76 +93,73 @@ function CreateProjectModal({ token, onCreated, onClose, defaultBranch = "main" 
   )
 }
 
-// ─── ZIP upload modal (reused per-row Analyse button) ────────────────────────
+// ─── Analyse modal ─────────────────────────────────────────────────────────────
 
-function AnalyseModal({
-  projectName,
-  onClose,
-  onSubmit,
-}: {
-  projectName: string
-  onClose: () => void
-  onSubmit: (file: File) => void
-}) {
+function AnalyseModal({ projectName, onClose, onSubmit }: { projectName: string; onClose: () => void; onSubmit: (file: File) => void }) {
   const [file, setFile] = useState<File | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4"
+        className="w-full max-w-md mx-4 rounded-xl shadow-2xl"
+        style={{ backgroundColor: "var(--xm-bg-elevated)", border: "1px solid var(--xm-border)" }}
         onClick={e => e.stopPropagation()}
       >
-        <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
-          <h3 className="font-semibold text-gray-900 text-sm">Analyse: {projectName}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+        <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--xm-border)" }}>
+          <h3 className="text-sm font-semibold" style={{ color: "var(--xm-tx-primary)" }}>Analyse: {projectName}</h3>
+          <button onClick={onClose} className="text-lg leading-none" style={{ color: "var(--xm-tx-muted)" }}>×</button>
         </div>
-        <div className="px-5 py-4">
-          <p className="text-sm text-gray-500 mb-4">
-            Upload a ZIP archive of your source files (max 10 MB).<br />
-            Supported: <span className="font-mono text-xs">.py .java .js .ts .jsx .tsx</span>
+        <div className="px-5 py-4 space-y-4">
+          <p className="text-sm" style={{ color: "var(--xm-tx-secondary)" }}>
+            Upload a ZIP archive (max 10 MB). Supported: <span className="font-mono text-xs">.py .java .js .ts .jsx .tsx</span>
           </p>
           <div
-            className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors mb-4"
+            className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors"
+            style={{ borderColor: "var(--xm-border)" }}
             onClick={() => inputRef.current?.click()}
+            onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "var(--xm-accent)"; (e.currentTarget as HTMLDivElement).style.backgroundColor = "var(--xm-accent-subtle)" }}
+            onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "var(--xm-border)"; (e.currentTarget as HTMLDivElement).style.backgroundColor = "transparent" }}
           >
             {file ? (
-              <div className="text-sm text-gray-700 font-medium">{file.name} ({(file.size / 1024).toFixed(0)} KB)</div>
+              <div className="text-sm font-medium" style={{ color: "var(--xm-tx-primary)" }}>
+                {file.name} <span style={{ color: "var(--xm-tx-muted)" }}>({(file.size / 1024).toFixed(0)} KB)</span>
+              </div>
             ) : (
               <>
-                <div className="text-gray-400 text-sm">Click to select a ZIP file</div>
-                <div className="text-xs text-gray-400 mt-1">or drag and drop</div>
+                <UploadIcon className="w-8 h-8 mx-auto mb-2" style={{ color: "var(--xm-tx-muted)" } as React.CSSProperties} />
+                <div className="text-sm" style={{ color: "var(--xm-tx-muted)" }}>Click to select a ZIP file</div>
               </>
             )}
           </div>
-          <input
-            ref={inputRef}
-            type="file"
-            accept=".zip,application/zip"
-            className="hidden"
-            onChange={e => setFile(e.target.files?.[0] ?? null)}
-          />
+          <input ref={inputRef} type="file" accept=".zip,application/zip" className="hidden" onChange={e => setFile(e.target.files?.[0] ?? null)} />
           <div className="flex gap-2 justify-end">
-            <button
-              onClick={onClose}
-              className="px-3 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              disabled={!file}
-              onClick={() => file && onSubmit(file)}
-              className="px-4 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Start Analysis
-            </button>
+            <button onClick={onClose} className="xm-btn xm-btn-secondary">Cancel</button>
+            <button disabled={!file} onClick={() => file && onSubmit(file)} className="xm-btn xm-btn-primary">Start Analysis</button>
           </div>
         </div>
       </div>
     </div>
+  )
+}
+
+// ─── Status dot ───────────────────────────────────────────────────────────────
+
+function QualityGateBadge({ status }: { status: string }) {
+  const passed = status === "Passed"
+  const color = passed ? "var(--xm-ok)" : status === "Failed" ? "var(--xm-err)" : "var(--xm-tx-muted)"
+  const bg    = passed ? "var(--xm-ok-sub)" : status === "Failed" ? "var(--xm-err-sub)" : "var(--xm-bg-elevated)"
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded"
+      style={{ color, backgroundColor: bg }}
+    >
+      <span className="w-1.5 h-1.5 rounded-full bg-current" />
+      {status}
+    </span>
   )
 }
 
@@ -207,7 +171,6 @@ export default function Projects() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
-  // Per-row analysis state: which project is being analysed
   const [analysingProject, setAnalysingProject] = useState<{ id: string; name: string } | null>(null)
   const [activeJobs, setActiveJobs] = useState<Record<string, ApiAnalysisJob>>({})
   const [analyseError, setAnalyseError] = useState<string | null>(null)
@@ -225,13 +188,10 @@ export default function Projects() {
       })
   }
 
-  useEffect(() => {
-    loadProjects()
-  }, [token])
+  useEffect(() => { loadProjects() }, [token])
 
   function handleCreated(project: ApiProject) {
     setShowModal(false)
-    // Add to top of list then refresh full list (to get accurate metrics)
     setProjects(prev => [project, ...prev])
     loadProjects()
   }
@@ -249,11 +209,8 @@ export default function Projects() {
     }
   }
 
-  // Poll any active jobs
   useEffect(() => {
-    const running = Object.entries(activeJobs).filter(
-      ([, job]) => job.status !== "completed" && job.status !== "failed"
-    )
+    const running = Object.entries(activeJobs).filter(([, job]) => job.status !== "completed" && job.status !== "failed")
     if (!running.length || !token) return
     let cancelled = false
     const interval = setInterval(() => {
@@ -272,100 +229,116 @@ export default function Projects() {
   }, [activeJobs, token])
 
   return (
-    <div className="p-6">
+    <div className="p-6 max-w-6xl mx-auto">
       {showModal && token && (
-        <CreateProjectModal
-          token={token}
-          onCreated={handleCreated}
-          onClose={() => setShowModal(false)}
-          defaultBranch={preferences.default_branch}
-        />
+        <CreateProjectModal token={token} onCreated={handleCreated} onClose={() => setShowModal(false)} defaultBranch={preferences.default_branch} />
       )}
       {analysingProject && (
-        <AnalyseModal
-          projectName={analysingProject.name}
-          onClose={() => setAnalysingProject(null)}
-          onSubmit={handleAnalyseSubmit}
-        />
+        <AnalyseModal projectName={analysingProject.name} onClose={() => setAnalysingProject(null)} onSubmit={handleAnalyseSubmit} />
       )}
 
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-start justify-between mb-6">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Projects</h2>
-          <p className="text-sm text-gray-500">{loading ? "Loading…" : `${projects.length} project${projects.length === 1 ? "" : "s"}`}</p>
+          <h2 className="text-xl font-semibold tracking-tight" style={{ color: "var(--xm-tx-primary)" }}>Projects</h2>
+          <p className="text-sm mt-0.5" style={{ color: "var(--xm-tx-secondary)" }}>
+            {loading ? "Loading…" : `${projects.length} project${projects.length === 1 ? "" : "s"}`}
+          </p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 font-medium"
-        >
-          Add Project
+        <button onClick={() => setShowModal(true)} className="xm-btn xm-btn-primary">
+          <FolderIcon className="w-4 h-4" />
+          New Project
         </button>
       </div>
 
       {error && (
-        <div className="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded px-4 py-3">{error}</div>
+        <div className="mb-4 text-sm rounded-lg px-4 py-3" style={{ backgroundColor: "var(--xm-err-sub)", color: "var(--xm-err)", border: "1px solid color-mix(in srgb, var(--xm-err) 40%, transparent)" }}>
+          {error}
+        </div>
       )}
       {analyseError && (
-        <div className="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded px-4 py-3">
-          {analyseError}
-          <button onClick={() => setAnalyseError(null)} className="ml-3 text-xs underline">Dismiss</button>
+        <div className="mb-4 text-sm rounded-lg px-4 py-3 flex items-center justify-between" style={{ backgroundColor: "var(--xm-err-sub)", color: "var(--xm-err)", border: "1px solid color-mix(in srgb, var(--xm-err) 40%, transparent)" }}>
+          <span>{analyseError}</span>
+          <button onClick={() => setAnalyseError(null)} className="text-xs underline ml-3">Dismiss</button>
         </div>
       )}
 
       {loading ? (
-        <div className="text-sm text-gray-400 py-12 text-center">Loading projects…</div>
+        <div className="space-y-2">
+          {[...Array(3)].map((_, i) => <div key={i} className="xm-skeleton h-14 rounded-lg" />)}
+        </div>
       ) : (
-        <div className="bg-white border border-gray-200 rounded overflow-hidden">
+        <div
+          className="rounded-lg overflow-hidden"
+          style={{ border: "1px solid var(--xm-border)" }}
+        >
           <table className="w-full">
             <thead>
-              <tr className="text-xs text-gray-500 border-b border-gray-200 bg-gray-50">
-                {["Project", "Quality Gate", "Bugs", "Vulnerabilities", "Code Smells", "Coverage", "Last Analysis", "Actions"].map(h => (
-                  <th key={h} className="text-left px-4 py-2.5 font-medium">{h}</th>
+              <tr style={{ borderBottom: "1px solid var(--xm-border)", backgroundColor: "var(--xm-bg-elevated)" }}>
+                {["Project", "Quality Gate", "Bugs", "Vulnerabilities", "Smells", "Coverage", "Last Analysis", ""].map(h => (
+                  <th
+                    key={h}
+                    className="text-left px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider"
+                    style={{ color: "var(--xm-tx-muted)" }}
+                  >
+                    {h}
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {projects.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-sm text-gray-400">
-                    No projects yet. Click <button onClick={() => setShowModal(true)} className="text-blue-600 hover:underline">Add Project</button> to create one.
+                  <td colSpan={8}>
+                    <div className="px-4 py-12 text-center text-sm" style={{ color: "var(--xm-tx-muted)", backgroundColor: "var(--xm-bg-surface)" }}>
+                      No projects yet.{" "}
+                      <button onClick={() => setShowModal(true)} className="underline" style={{ color: "var(--xm-accent)" }}>
+                        Create your first project
+                      </button>
+                    </div>
                   </td>
                 </tr>
-              ) : projects.map(p => (
-                <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50">
+              ) : projects.map((p, idx) => (
+                <tr
+                  key={p.id}
+                  style={{
+                    backgroundColor: "var(--xm-bg-surface)",
+                    borderBottom: idx < projects.length - 1 ? "1px solid var(--xm-border-sub)" : "none",
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLTableRowElement).style.backgroundColor = "var(--xm-bg-hover)" }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLTableRowElement).style.backgroundColor = "var(--xm-bg-surface)" }}
+                >
                   <td className="px-4 py-3">
-                    <div className="text-sm font-medium text-gray-900">{p.name}</div>
-                    <div className="text-xs font-mono text-gray-400">{p.branch}</div>
+                    <div className="text-sm font-medium" style={{ color: "var(--xm-tx-primary)" }}>{p.name}</div>
+                    <div className="text-xs font-mono" style={{ color: "var(--xm-tx-muted)" }}>{p.branch}</div>
                   </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded ${p.status === "Passed" ? "bg-green-100 text-green-700" : p.status === "Failed" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${p.status === "Passed" ? "bg-green-500" : p.status === "Failed" ? "bg-red-500" : "bg-gray-400"}`} />
-                      {p.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm font-semibold text-red-600">{p.bugs}</td>
-                  <td className="px-4 py-3 text-sm font-semibold text-orange-600">{p.vulnerabilities}</td>
-                  <td className="px-4 py-3 text-sm text-amber-600">{p.code_smells}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700">{p.coverage ?? "—"}</td>
-                  <td className="px-4 py-3 text-xs text-gray-400">{p.last_analysis ?? "Never"}</td>
+                  <td className="px-4 py-3"><QualityGateBadge status={p.status} /></td>
+                  <td className="px-4 py-3 text-sm font-semibold" style={{ color: p.bugs > 0 ? "var(--xm-err)" : "var(--xm-tx-secondary)" }}>{p.bugs}</td>
+                  <td className="px-4 py-3 text-sm font-semibold" style={{ color: p.vulnerabilities > 0 ? "var(--xm-high)" : "var(--xm-tx-secondary)" }}>{p.vulnerabilities}</td>
+                  <td className="px-4 py-3 text-sm" style={{ color: p.code_smells > 0 ? "var(--xm-medium)" : "var(--xm-tx-secondary)" }}>{p.code_smells}</td>
+                  <td className="px-4 py-3 text-sm" style={{ color: "var(--xm-tx-secondary)" }}>{p.coverage ?? "—"}</td>
+                  <td className="px-4 py-3 text-xs" style={{ color: "var(--xm-tx-muted)" }}>{p.last_analysis ?? "Never"}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       <button
                         onClick={() => openProject(p.id, p.name)}
-                        className="text-xs text-blue-600 hover:underline font-medium"
+                        className="text-xs font-medium transition-colors"
+                        style={{ color: "var(--xm-accent)" }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "var(--xm-accent-hover)" }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "var(--xm-accent)" }}
                       >
                         Open
                       </button>
                       {activeJobs[p.id] && activeJobs[p.id].status !== "completed" && activeJobs[p.id].status !== "failed" ? (
-                        <span className="text-xs text-blue-500 animate-pulse">Analysing…</span>
+                        <span className="text-xs xm-pulse" style={{ color: "var(--xm-info)" }}>Analysing…</span>
                       ) : activeJobs[p.id]?.status === "completed" ? (
-                        <span className="text-xs text-green-600">
+                        <span className="text-xs font-medium" style={{ color: "var(--xm-ok)" }}>
                           ✓ {activeJobs[p.id].findings_count ?? 0} findings
                         </span>
                       ) : activeJobs[p.id]?.status === "failed" ? (
                         <button
                           onClick={() => setAnalysingProject({ id: p.id, name: p.name })}
-                          className="text-xs text-red-500 hover:underline"
+                          className="text-xs"
+                          style={{ color: "var(--xm-err)" }}
                           title={activeJobs[p.id].failure_reason ?? "Analysis failed"}
                         >
                           Retry
@@ -373,12 +346,15 @@ export default function Projects() {
                       ) : (
                         <button
                           onClick={() => setAnalysingProject({ id: p.id, name: p.name })}
-                          className="text-xs text-blue-600 hover:underline"
+                          className="text-xs transition-colors"
+                          style={{ color: "var(--xm-tx-muted)" }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "var(--xm-accent)" }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "var(--xm-tx-muted)" }}
                         >
+                          <AnalyzeIcon className="w-3.5 h-3.5 inline mr-0.5" />
                           Analyse
                         </button>
                       )}
-                      <button className="text-xs text-gray-400 hover:text-gray-700">Settings</button>
                     </div>
                   </td>
                 </tr>

@@ -7,7 +7,7 @@ export interface AppearanceSettings {
 }
 
 export const DEFAULT_APPEARANCE: AppearanceSettings = {
-  theme: "Light (default)",
+  theme: "Dark",
   codeFontSize: "13px",
   codeColorScheme: "Dark (default)",
 }

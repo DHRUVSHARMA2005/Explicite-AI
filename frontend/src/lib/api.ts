@@ -168,8 +168,11 @@ export interface KeyMetrics {
 export interface SupportingMetrics {
   coverage_pct: number | null
   coverage_target_pct: number | null
+  coverage_message: string | null
   duplications_pct: number | null
+  duplications_message: string | null
   technical_debt_display: string | null
+  technical_debt_is_estimate: boolean
   maintainability_rating: string | null
 }
 
@@ -191,9 +194,12 @@ export interface ApiDashboard {
 
 // ─── Error class ──────────────────────────────────────────────────────────────
 export class ApiError extends Error {
-  constructor(public readonly status: number, message: string) {
+  /** Raw `detail` from the JSON response body; useful for structured 422 Pydantic errors. */
+  public readonly detail?: unknown
+  constructor(public readonly status: number, message: string, detail?: unknown) {
     super(message)
     this.name = "ApiError"
+    this.detail = detail
   }
 }
 
@@ -205,13 +211,15 @@ async function apiFetch<T>(path: string, init: RequestInit = {}, token?: string)
   const res = await fetch(`${BASE}${path}`, { ...init, headers })
 
   if (!res.ok) {
-    let detail: string = res.statusText
+    let msgDetail: string = res.statusText
+    let rawDetail: unknown
     try {
       const body = await res.json() as { detail?: unknown }
-      if (typeof body.detail === "string") detail = body.detail
-      else if (body.detail !== undefined) detail = JSON.stringify(body.detail)
+      rawDetail = body.detail
+      if (typeof body.detail === "string") msgDetail = body.detail
+      else if (body.detail !== undefined) msgDetail = JSON.stringify(body.detail)
     } catch { /* keep statusText */ }
-    throw new ApiError(res.status, detail)
+    throw new ApiError(res.status, msgDetail, rawDetail)
   }
   return res.json() as Promise<T>
 }
@@ -437,6 +445,10 @@ export interface ApiAnalysisJob {
   vulnerabilities_count: number
   code_smells_count: number
   security_hotspots_count: number
+  // Source metadata
+  source_branch: string | null
+  source_revision: string | null
+  repo_url: string | null
 }
 
 export function apiSubmitAnalysis(
@@ -479,6 +491,18 @@ export function apiListAnalysisJobs(
   projectId: string,
 ): Promise<ApiAnalysisJob[]> {
   return apiFetch<ApiAnalysisJob[]>(`/projects/${projectId}/analyse`, {}, token)
+}
+
+export function apiSubmitGitAnalysis(
+  token: string,
+  projectId: string,
+  repoUrl: string,
+  branch: string,
+): Promise<ApiAnalysisJob> {
+  return apiFetch<ApiAnalysisJob>(`/projects/${projectId}/analyse/git`, {
+    method: "POST",
+    body: JSON.stringify({ repo_url: repoUrl, branch }),
+  }, token)
 }
 
 // ─── AI — explanations and assistant ────────────────────────────────────────

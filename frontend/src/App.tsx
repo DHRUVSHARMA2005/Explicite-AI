@@ -13,6 +13,7 @@ import Projects from "./screens/Projects"
 import Settings from "./screens/Settings"
 import { type UserPublic, type ApiIssueSummary, type UserPreferences, type ApiLearningResource, DEFAULT_PREFERENCES, getStoredToken, storeToken, clearToken } from "./lib/api"
 import { applyAppearance, loadAppearance } from "./lib/appearance"
+import { CodeIcon, FolderIcon, ChevronRightIcon } from "./components/Icons"
 
 export type Screen =
   | "login"
@@ -30,12 +31,10 @@ export type Screen =
 interface NavState {
   screen: Screen
   navigate: (s: Screen) => void
-  // Auth
   token: string | null
   currentUser: UserPublic | null
   login: (token: string, user: UserPublic) => void
   logout: () => void
-  // Project / issue selection
   selectedProjectId: string | null
   selectedProjectName: string | null
   openProject: (id: string, name: string) => void
@@ -45,9 +44,7 @@ interface NavState {
   selectedFixId: string | null
   openFix: (fixId: string) => void
   updateCurrentUser: (user: UserPublic) => void
-  // Derived preferences shortcut (from currentUser.preferences)
   preferences: UserPreferences
-  // Learning tutor
   selectedLearningResource: ApiLearningResource | null
   openTutor: (resource: ApiLearningResource) => void
 }
@@ -74,26 +71,52 @@ export const NavCtx = createContext<NavState>({
 })
 export const useNav = () => useContext(NavCtx)
 
-function initials(name: string): string {
-  return name.split(" ").map(w => w[0] ?? "").join("").slice(0, 2).toUpperCase()
+const SCREEN_TITLES: Partial<Record<Screen, string>> = {
+  dashboard:     "Dashboard",
+  issues:        "Findings",
+  "issue-detail":"Issue Detail",
+  "ai-assistant":"AI Assistant",
+  "suggested-fix":"Suggested Fix",
+  "code-analysis":"Code Analysis",
+  learning:      "Learning",
+  tutor:         "AI Tutor",
+  projects:      "Projects",
+  settings:      "Settings",
 }
 
-function AppHeader({ currentUser, projectName }: { currentUser: UserPublic | null; projectName: string | null }) {
-  const displayName = currentUser?.full_name ?? "Jane Doe"
-  const displayInitials = currentUser ? initials(currentUser.full_name) : "JD"
-  const displayProject = projectName ?? "Student Management System"
+function TopBar({ screen, projectName, navigate }: {
+  screen: Screen
+  projectName: string | null
+  navigate: (s: Screen) => void
+}) {
+  const title = SCREEN_TITLES[screen] ?? screen
+  const showProjectCrumb = projectName && ["dashboard","issues","issue-detail","ai-assistant","suggested-fix","code-analysis"].includes(screen)
 
   return (
-    <header className="h-11 border-b border-gray-200 bg-white flex items-center px-4 gap-3 shrink-0">
-      <span className="font-semibold text-gray-900 text-sm">{displayProject}</span>
-      <span className="text-gray-300">·</span>
-      <span className="text-gray-500 font-mono text-xs">main</span>
-      <div className="ml-auto flex items-center gap-3">
-        <span className="text-xs text-gray-400">{displayName}</span>
-        <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-semibold select-none">
-          {displayInitials}
-        </div>
-      </div>
+    <header
+      className="h-11 shrink-0 flex items-center px-5 gap-2"
+      style={{
+        backgroundColor: "var(--xm-bg-sidebar)",
+        borderBottom: "1px solid var(--xm-border)",
+      }}
+    >
+      {showProjectCrumb ? (
+        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs">
+          <button
+            onClick={() => navigate("projects")}
+            className="transition-colors"
+            style={{ color: "var(--xm-tx-muted)" }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "var(--xm-accent)" }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "var(--xm-tx-muted)" }}
+          >
+            {projectName}
+          </button>
+          <ChevronRightIcon className="w-3 h-3" style={{ color: "var(--xm-tx-muted)" } as React.CSSProperties} />
+          <span className="font-medium" style={{ color: "var(--xm-tx-primary)" }}>{title}</span>
+        </nav>
+      ) : (
+        <span className="text-sm font-medium" style={{ color: "var(--xm-tx-primary)" }}>{title}</span>
+      )}
     </header>
   )
 }
@@ -103,8 +126,8 @@ export default function App() {
   const [token, setToken] = useState<string | null>(getStoredToken)
   const [currentUser, setCurrentUser] = useState<UserPublic | null>(null)
 
-  // Apply saved appearance settings on first render
   useEffect(() => { applyAppearance(loadAppearance()) }, [])
+
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [selectedProjectName, setSelectedProjectName] = useState<string | null>(null)
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
@@ -188,21 +211,21 @@ export default function App() {
 
   return (
     <NavCtx.Provider value={ctx}>
-      <div className="flex h-full bg-gray-50 text-gray-900 text-sm">
+      <div className="flex h-full overflow-hidden" style={{ backgroundColor: "var(--xm-bg-app)" }}>
         <Sidebar />
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <AppHeader currentUser={currentUser} projectName={selectedProjectName} />
-          <main className="flex-1 overflow-y-auto">
-            {screen === "dashboard" && <Dashboard />}
-            {screen === "issues" && <Issues />}
-            {screen === "issue-detail" && <IssueDetail />}
-            {screen === "ai-assistant" && <AIAssistant />}
+          <TopBar screen={screen} projectName={selectedProjectName} navigate={setScreen} />
+          <main className="flex-1 overflow-y-auto" style={{ backgroundColor: "var(--xm-bg-app)" }}>
+            {screen === "dashboard"     && <Dashboard />}
+            {screen === "issues"        && <Issues />}
+            {screen === "issue-detail"  && <IssueDetail />}
+            {screen === "ai-assistant"  && <AIAssistant />}
             {screen === "suggested-fix" && <SuggestedFix />}
             {screen === "code-analysis" && <CodeAnalysis />}
-            {screen === "learning" && <Learning />}
-            {screen === "tutor" && <TutorSession />}
-            {screen === "projects" && <Projects />}
-            {screen === "settings" && <Settings />}
+            {screen === "learning"      && <Learning />}
+            {screen === "tutor"         && <TutorSession />}
+            {screen === "projects"      && <Projects />}
+            {screen === "settings"      && <Settings />}
           </main>
         </div>
       </div>

@@ -159,8 +159,11 @@ async def get_dashboard(
             supporting_metrics=SupportingMetrics(
                 coverage_pct=None,
                 coverage_target_pct=80.0,
+                coverage_message="Coverage requires a test execution report. Run your test suite with coverage and provide the report to see this metric.",
                 duplications_pct=None,
+                duplications_message="No analysis has been run yet.",
                 technical_debt_display=None,
+                technical_debt_is_estimate=False,
                 maintainability_rating=None,
             ),
             priority_issues=[],
@@ -256,8 +259,17 @@ async def get_dashboard(
         supporting_metrics=SupportingMetrics(
             coverage_pct=job.coverage_pct,
             coverage_target_pct=80.0,
+            coverage_message=(
+                None if job.coverage_pct is not None
+                else "Coverage requires a test execution report. Run your test suite with coverage and provide the report to see this metric."
+            ),
             duplications_pct=job.duplications_pct,
+            duplications_message=(
+                None if job.duplications_pct is not None
+                else "Duplication data unavailable — no supported source files were found or the source was too small."
+            ),
             technical_debt_display=_format_technical_debt(job.technical_debt_minutes),
+            technical_debt_is_estimate=job.technical_debt_minutes is not None,
             maintainability_rating=None,
         ),
         priority_issues=priority_issues,

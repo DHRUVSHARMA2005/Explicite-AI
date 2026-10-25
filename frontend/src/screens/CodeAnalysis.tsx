@@ -1,134 +1,397 @@
+import React, { useEffect, useRef, useState } from "react"
 import { useNav } from "../App"
+import { UploadIcon, GitBranchIcon, ClockIcon, CheckIcon, XIcon } from "../components/Icons"
+import {
+  apiListAnalysisJobs,
+  apiSubmitAnalysis,
+  apiSubmitGitAnalysis,
+  ApiError,
+  type ApiAnalysisJob,
+} from "../lib/api"
 
-const metrics = [
-  { metric: "Bugs", before: 12, after: 12 },
-  { metric: "Vulnerabilities", before: 3, after: 2 },
-  { metric: "Code Smells", before: 24, after: 24 },
-  { metric: "Security Hotspots", before: 5, after: 5 },
-  { metric: "Coverage", before: "64%", after: "65%" },
-  { metric: "Duplications", before: "8.3%", after: "8.3%" },
-]
+type Mode = "zip" | "git"
+
+const POLL_INTERVAL_MS = 3000
+
+function statusMeta(job: ApiAnalysisJob): { color: string; bg: string; label: string } {
+  if (job.status === "completed") return { color: "var(--xm-ok)", bg: "var(--xm-ok-sub)", label: "Completed" }
+  if (job.status === "failed")    return { color: "var(--xm-err)", bg: "var(--xm-err-sub)", label: "Failed" }
+  if (job.status === "running")   return { color: "var(--xm-info)", bg: "var(--xm-info-sub)", label: "Running…" }
+  if (job.status === "cancelled") return { color: "var(--xm-tx-muted)", bg: "var(--xm-bg-elevated)", label: "Cancelled" }
+  const label = job.repo_url ? "Queued (cloning…)" : "Queued"
+  return { color: "var(--xm-medium)", bg: "var(--xm-medium-bg)", label }
+}
+
+function shortSha(sha: string | null): string {
+  if (!sha || sha === "unknown") return ""
+  return sha.slice(0, 7)
+}
+
+function hostOf(url: string | null): string {
+  if (!url) return ""
+  try { return new URL(url).hostname } catch { return url }
+}
 
 export default function CodeAnalysis() {
-  const { navigate } = useNav()
-  return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">Code Analysis</h2>
-          <p className="text-sm text-gray-500">Student Management System · 15 Sep 2026, 15:04 — Verification run</p>
-        </div>
-        <button
-          disabled
-          title="Analysis triggering (FR-AN-01) is not yet implemented"
-          className="px-3 py-1.5 bg-gray-200 text-gray-400 text-sm rounded font-medium cursor-not-allowed"
+  const { token, selectedProjectId, selectedProjectName, navigate, logout } = useNav()
+
+  const [mode, setMode] = useState<Mode>("zip")
+  const [jobs, setJobs] = useState<ApiAnalysisJob[]>([])
+  const [loadingJobs, setLoadingJobs] = useState(false)
+  const [jobsError, setJobsError] = useState<string | null>(null)
+
+  const [zipFile, setZipFile] = useState<File | null>(null)
+  const [zipSubmitting, setZipSubmitting] = useState(false)
+  const [zipError, setZipError] = useState<string | null>(null)
+  const zipInputRef = useRef<HTMLInputElement>(null)
+
+  const [gitUrl, setGitUrl] = useState("")
+  const [gitBranch, setGitBranch] = useState("main")
+  const [gitSubmitting, setGitSubmitting] = useState(false)
+  const [gitError, setGitError] = useState<string | null>(null)
+
+  const isPolling = jobs.some(j => j.status === "queued" || j.status === "running")
+
+  useEffect(() => {
+    if (!token || !selectedProjectId) return
+    let cancelled = false
+    setLoadingJobs(true)
+    setJobsError(null)
+    apiListAnalysisJobs(token, selectedProjectId)
+      .then(data => { if (!cancelled) { setJobs(data); setLoadingJobs(false) } })
+      .catch(err => {
+        if (cancelled) return
+        if (err instanceof ApiError && err.status === 401) { logout(); return }
+        setJobsError(err instanceof Error ? err.message : "Failed to load jobs")
+        setLoadingJobs(false)
+      })
+    return () => { cancelled = true }
+  }, [token, selectedProjectId])
+
+  useEffect(() => {
+    if (!token || !selectedProjectId || !isPolling) return
+    const id = setInterval(() => {
+      apiListAnalysisJobs(token, selectedProjectId)
+        .then(data => setJobs(data))
+        .catch(() => {})
+    }, POLL_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [token, selectedProjectId, isPolling])
+
+  async function handleZipSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!zipFile || !token || !selectedProjectId || zipSubmitting) return
+    setZipSubmitting(true)
+    setZipError(null)
+    try {
+      const job = await apiSubmitAnalysis(token, selectedProjectId, zipFile)
+      setJobs(prev => [job, ...prev])
+      setZipFile(null)
+      if (zipInputRef.current) zipInputRef.current.value = ""
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) { logout(); return }
+      if (err instanceof ApiError && err.status === 413) {
+        setZipError("File is too large (max 10 MB).")
+      } else if (err instanceof ApiError && err.status === 403) {
+        setZipError("Developer role or higher required to run analysis.")
+      } else {
+        setZipError(err instanceof Error ? err.message : "Upload failed.")
+      }
+    } finally {
+      setZipSubmitting(false)
+    }
+  }
+
+  async function handleGitSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!token || !selectedProjectId || gitSubmitting) return
+    const trimUrl = gitUrl.trim()
+    const trimBranch = gitBranch.trim() || "main"
+    if (!trimUrl) { setGitError("Repository URL is required."); return }
+    if (!trimUrl.startsWith("https://")) {
+      setGitError("Only HTTPS repository URLs are supported.")
+      return
+    }
+    setGitSubmitting(true)
+    setGitError(null)
+    try {
+      const job = await apiSubmitGitAnalysis(token, selectedProjectId, trimUrl, trimBranch)
+      setJobs(prev => [job, ...prev])
+      setGitUrl("")
+      setGitBranch("main")
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) { logout(); return }
+      if (err instanceof ApiError && err.status === 403) {
+        setGitError("Developer role or higher required to run analysis.")
+      } else if (err instanceof ApiError && err.status === 422) {
+        setGitError(err.message || "Invalid repository URL or branch name.")
+      } else if (err instanceof ApiError && err.status === 503) {
+        setGitError("git is not available on this server.")
+      } else {
+        setGitError(err instanceof Error ? err.message : "Submission failed.")
+      }
+    } finally {
+      setGitSubmitting(false)
+    }
+  }
+
+  if (!selectedProjectId) {
+    return (
+      <div className="flex items-center justify-center h-full p-6">
+        <div
+          className="max-w-sm text-center px-8 py-12 rounded-xl"
+          style={{ backgroundColor: "var(--xm-bg-surface)", border: "1px solid var(--xm-border)" }}
         >
-          Run New Analysis (not available)
-        </button>
-      </div>
-
-      {/* Issue investigation summary — connects this screen to the workflow */}
-      <div className="bg-white border border-gray-200 rounded p-4 mb-5">
-        <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Issue Investigation Summary</div>
-        <div className="grid grid-cols-3 gap-6">
-          <div>
-            <div className="text-xs text-gray-400 mb-0.5">Issue Investigated</div>
-            <div className="text-sm font-semibold text-gray-900">SQL Injection</div>
-            <div className="text-xs font-mono text-gray-400 mt-0.5">StudentDAO.java:42 · java:S3649</div>
-          </div>
-          <div>
-            <div className="text-xs text-gray-400 mb-0.5">Previous Status</div>
-            <div className="text-sm font-semibold text-gray-700">Open</div>
-            <div className="text-xs text-gray-400 mt-0.5">Detected 15 Sep 2026</div>
-          </div>
-          <div>
-            <div className="text-xs text-gray-400 mb-0.5">Current Analysis</div>
-            <div className="text-sm font-semibold text-green-600">Analysis Completed</div>
-            <div className="text-xs text-gray-400 mt-0.5">Verification run · 15 Sep 2026, 15:04</div>
-          </div>
+          <div className="text-sm mb-4" style={{ color: "var(--xm-tx-muted)" }}>No project selected.</div>
+          <button onClick={() => navigate("projects")} className="xm-btn xm-btn-primary">
+            Choose a project →
+          </button>
         </div>
       </div>
+    )
+  }
 
-      <div className="grid grid-cols-2 gap-4 mb-5">
-        {[
-          { label: "Before Changes", gatePassed: false },
-          { label: "After Changes", gatePassed: true },
-        ].map((col, ci) => (
-          <div key={col.label} className="bg-white border border-gray-200 rounded p-4">
-            <div className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-3">{col.label}</div>
-            <div className={`flex items-center gap-2 px-3 py-2 rounded border mb-4 ${col.gatePassed ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
-              <div className={`w-2.5 h-2.5 rounded-full ${col.gatePassed ? "bg-green-500" : "bg-red-500"}`} />
-              <span className={`text-sm font-semibold ${col.gatePassed ? "text-green-700" : "text-red-700"}`}>
-                Quality Gate: {col.gatePassed ? "Passed" : "Failed"}
-              </span>
-            </div>
-            <div className="space-y-2.5">
-              {metrics.map(row => {
-                const val = ci === 0 ? row.before : row.after
-                const improved = ci === 1 && row.before !== row.after
-                return (
-                  <div key={row.metric} className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">{row.metric}</span>
-                    <span className={`font-medium ${improved ? "text-green-600" : "text-gray-900"}`}>
-                      {val}
-                      {improved && <span className="text-xs text-green-500 ml-1">↓</span>}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        ))}
+  return (
+    <div className="p-6 max-w-4xl mx-auto space-y-5">
+      <div>
+        <h2 className="text-xl font-semibold tracking-tight" style={{ color: "var(--xm-tx-primary)" }}>
+          Code Analysis
+        </h2>
+        <p className="text-sm mt-0.5" style={{ color: "var(--xm-tx-secondary)" }}>
+          {selectedProjectName ?? "Project"} — submit source code for static analysis with Semgrep
+        </p>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded mb-4">
-        <div className="px-4 py-3 border-b border-gray-200">
-          <h3 className="font-medium text-gray-900 text-sm">Issues Resolved (1)</h3>
-        </div>
-        <div className="p-4">
-          <div className="flex items-start gap-3 p-3 bg-green-50 border border-green-200 rounded">
-            <span className="text-green-600 font-bold mt-0.5">✓</span>
-            <div>
-              <div className="text-sm font-medium text-gray-900">SQL Injection — StudentDAO.java:42</div>
-              <div className="text-xs text-gray-500 mt-0.5">Resolved by applying PreparedStatement fix · rule java:S3649 · verified clean</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white border border-gray-200 rounded">
-        <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-          <h3 className="font-medium text-gray-900 text-sm">Issues Remaining (7)</h3>
-          <button onClick={() => navigate("issues")} className="text-xs text-blue-600 hover:underline">View all →</button>
-        </div>
-        <div className="divide-y divide-gray-100">
-          {[
-            { sev: "Critical", title: "Hard-coded Password", file: "DatabaseConfig.java:15" },
-            { sev: "High", title: "Null Pointer Dereference", file: "StudentService.java:87" },
-            { sev: "High", title: "Resource Leak", file: "ReportGenerator.java:134" },
-            { sev: "High", title: "Weak Cryptography Algorithm", file: "AuthService.java:67" },
-            { sev: "Medium", title: "High Cognitive Complexity", file: "EnrollmentManager.java:201" },
-            { sev: "Medium", title: "Duplicate Code", file: "GradeCalculator.java:56" },
-            { sev: "Low", title: "Unused Variable", file: "CourseController.java:23" },
-          ].map(i => (
-            <div
-              key={i.title}
-              className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer"
-              onClick={() => navigate("issues")}
+      {/* Submit panel */}
+      <div
+        className="rounded-lg overflow-hidden"
+        style={{ backgroundColor: "var(--xm-bg-surface)", border: "1px solid var(--xm-border)" }}
+      >
+        {/* Mode tabs */}
+        <div className="flex" style={{ borderBottom: "1px solid var(--xm-border)" }}>
+          {(["zip", "git"] as Mode[]).map(m => (
+            <button
+              key={m}
+              onClick={() => { setMode(m); setZipError(null); setGitError(null) }}
+              className="px-5 py-2.5 text-sm font-medium flex items-center gap-1.5 transition-colors"
+              style={{
+                color: mode === m ? "var(--xm-accent)" : "var(--xm-tx-muted)",
+                backgroundColor: mode === m ? "var(--xm-accent-subtle)" : "transparent",
+                borderBottom: mode === m ? "2px solid var(--xm-accent)" : "2px solid transparent",
+              }}
             >
-              <span className={`text-xs font-medium px-2 py-0.5 rounded ${
-                i.sev === "Critical" ? "bg-red-100 text-red-700" :
-                i.sev === "High" ? "bg-orange-100 text-orange-700" :
-                i.sev === "Medium" ? "bg-amber-100 text-amber-700" :
-                "bg-sky-100 text-sky-700"
-              }`}>{i.sev}</span>
-              <div>
-                <div className="text-sm font-medium text-gray-900">{i.title}</div>
-                <div className="text-xs font-mono text-gray-400">{i.file}</div>
-              </div>
-            </div>
+              {m === "zip" ? <><UploadIcon className="w-4 h-4" /> Upload ZIP</> : <><GitBranchIcon className="w-4 h-4" /> Git Repository</>}
+            </button>
           ))}
         </div>
+
+        <div className="p-5">
+          {mode === "zip" && (
+            <form onSubmit={handleZipSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--xm-tx-secondary)" }}>
+                  ZIP archive of source files (max 10 MB)
+                </label>
+                <div
+                  className="border-2 border-dashed rounded-lg p-5 text-center cursor-pointer transition-colors"
+                  style={{ borderColor: zipFile ? "var(--xm-accent)" : "var(--xm-border)", backgroundColor: zipFile ? "var(--xm-accent-subtle)" : "transparent" }}
+                  onClick={() => zipInputRef.current?.click()}
+                  onMouseEnter={e => { if (!zipFile) (e.currentTarget as HTMLDivElement).style.borderColor = "var(--xm-accent)" }}
+                  onMouseLeave={e => { if (!zipFile) (e.currentTarget as HTMLDivElement).style.borderColor = "var(--xm-border)" }}
+                >
+                  {zipFile ? (
+                    <div className="text-sm font-medium" style={{ color: "var(--xm-tx-primary)" }}>
+                      {zipFile.name}
+                      <span className="ml-2" style={{ color: "var(--xm-tx-muted)" }}>({(zipFile.size / 1024).toFixed(0)} KB)</span>
+                    </div>
+                  ) : (
+                    <>
+                      <UploadIcon className="w-8 h-8 mx-auto mb-2" style={{ color: "var(--xm-tx-muted)" } as React.CSSProperties} />
+                      <div className="text-sm" style={{ color: "var(--xm-tx-secondary)" }}>Click to select a ZIP file</div>
+                      <div className="text-xs mt-1" style={{ color: "var(--xm-tx-muted)" }}>Python, Java, JavaScript, TypeScript supported</div>
+                    </>
+                  )}
+                </div>
+                <input
+                  ref={zipInputRef}
+                  type="file"
+                  accept=".zip,application/zip"
+                  onChange={e => setZipFile(e.target.files?.[0] ?? null)}
+                  className="hidden"
+                />
+              </div>
+              {zipError && (
+                <div className="text-xs rounded px-3 py-2.5" style={{ backgroundColor: "var(--xm-err-sub)", color: "var(--xm-err)", border: "1px solid color-mix(in srgb, var(--xm-err) 40%, transparent)" }}>
+                  {zipError}
+                </div>
+              )}
+              <button type="submit" disabled={!zipFile || zipSubmitting} className="xm-btn xm-btn-primary">
+                {zipSubmitting ? "Uploading…" : "Run Analysis"}
+              </button>
+            </form>
+          )}
+
+          {mode === "git" && (
+            <form onSubmit={handleGitSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--xm-tx-secondary)" }}>
+                  Repository URL <span style={{ color: "var(--xm-err)" }}>*</span>
+                </label>
+                <input
+                  type="url"
+                  value={gitUrl}
+                  onChange={e => setGitUrl(e.target.value)}
+                  placeholder="https://github.com/owner/repository"
+                  className="xm-input"
+                />
+                <p className="text-xs mt-1" style={{ color: "var(--xm-tx-muted)" }}>
+                  Public HTTPS repositories only.
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--xm-tx-secondary)" }}>Branch</label>
+                <input
+                  type="text"
+                  value={gitBranch}
+                  onChange={e => setGitBranch(e.target.value)}
+                  placeholder="main"
+                  className="xm-input"
+                  style={{ maxWidth: "12rem" }}
+                />
+              </div>
+              {gitError && (
+                <div className="text-xs rounded px-3 py-2.5" style={{ backgroundColor: "var(--xm-err-sub)", color: "var(--xm-err)", border: "1px solid color-mix(in srgb, var(--xm-err) 40%, transparent)" }}>
+                  {gitError}
+                </div>
+              )}
+              <div className="flex items-center gap-4">
+                <button type="submit" disabled={!gitUrl.trim() || gitSubmitting} className="xm-btn xm-btn-primary">
+                  {gitSubmitting ? "Queuing…" : "Run Analysis"}
+                </button>
+                <p className="text-xs" style={{ color: "var(--xm-tx-muted)" }}>Cloning may take up to 2 minutes.</p>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
+
+      {/* Job history */}
+      <div
+        className="rounded-lg overflow-hidden"
+        style={{ backgroundColor: "var(--xm-bg-surface)", border: "1px solid var(--xm-border)" }}
+      >
+        <div
+          className="px-5 py-3.5 flex items-center justify-between"
+          style={{ borderBottom: "1px solid var(--xm-border)" }}
+        >
+          <h3 className="text-sm font-semibold" style={{ color: "var(--xm-tx-primary)" }}>Recent Analysis Jobs</h3>
+          {isPolling && (
+            <div className="flex items-center gap-1.5 text-xs" style={{ color: "var(--xm-info)" }}>
+              <span className="w-1.5 h-1.5 rounded-full bg-current xm-pulse" />
+              Live · updating
+            </div>
+          )}
+        </div>
+
+        {loadingJobs && (
+          <div className="p-8 text-center text-sm" style={{ color: "var(--xm-tx-muted)" }}>
+            <div className="xm-skeleton h-4 w-48 mx-auto rounded mb-2" />
+            <div className="xm-skeleton h-4 w-64 mx-auto rounded" />
+          </div>
+        )}
+        {jobsError && (
+          <div className="p-4 text-sm" style={{ color: "var(--xm-err)" }}>{jobsError}</div>
+        )}
+        {!loadingJobs && !jobsError && jobs.length === 0 && (
+          <div className="p-8 text-sm text-center" style={{ color: "var(--xm-tx-muted)" }}>
+            No analysis jobs yet. Submit a ZIP or a Git repository URL above.
+          </div>
+        )}
+        {jobs.length > 0 && (
+          <div className="divide-y" style={{ borderColor: "var(--xm-border-sub)" }}>
+            {jobs.map(job => {
+              const { color, bg, label } = statusMeta(job)
+              return (
+                <div key={job.id} className="px-5 py-3 flex items-start gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span
+                        className="text-xs px-2 py-0.5 rounded font-medium"
+                        style={{ color, backgroundColor: bg }}
+                      >
+                        {label}
+                      </span>
+                      {job.repo_url ? (
+                        <span className="text-xs font-mono truncate max-w-xs" style={{ color: "var(--xm-tx-secondary)" }}>
+                          {hostOf(job.repo_url)}{job.source_branch ? `@${job.source_branch}` : ""}
+                        </span>
+                      ) : (
+                        <span className="text-xs" style={{ color: "var(--xm-tx-muted)" }}>ZIP upload</span>
+                      )}
+                      {job.source_revision && shortSha(job.source_revision) && (
+                        <span
+                          className="text-xs font-mono px-1 rounded"
+                          style={{ color: "var(--xm-tx-muted)", backgroundColor: "var(--xm-bg-elevated)" }}
+                        >
+                          {shortSha(job.source_revision)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-1 text-xs" style={{ color: "var(--xm-tx-muted)" }}>
+                      <ClockIcon className="w-3 h-3" />
+                      {new Date(job.created_at).toLocaleString()}
+                      {job.engine_version && ` · semgrep ${job.engine_version}`}
+                    </div>
+                    {job.failure_reason && (
+                      <div className="text-xs mt-0.5 truncate max-w-lg" style={{ color: "var(--xm-err)" }}>
+                        {job.failure_reason}
+                      </div>
+                    )}
+                  </div>
+                  {job.status === "completed" && (
+                    <div className="shrink-0 flex items-center gap-5">
+                      <div className="space-y-0.5 text-xs text-right">
+                        {[
+                          ["Vulns", job.vulnerabilities_count],
+                          ["Bugs", job.bugs_count],
+                          ["Smells", job.code_smells_count],
+                        ].map(([lbl, count]) => (
+                          <div key={String(lbl)} className="flex gap-2 justify-end">
+                            <span style={{ color: "var(--xm-tx-muted)" }}>{lbl}</span>
+                            <span
+                              className="font-medium"
+                              style={{ color: Number(count) > 0 ? "var(--xm-err)" : "var(--xm-tx-secondary)" }}
+                            >
+                              {count}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => navigate("issues")}
+                        className="xm-btn xm-btn-secondary text-xs px-2 py-1"
+                      >
+                        View →
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Security note */}
+      <div
+        className="rounded-lg px-4 py-3 text-xs"
+        style={{ backgroundColor: "var(--xm-bg-elevated)", border: "1px solid var(--xm-border)", color: "var(--xm-tx-muted)" }}
+      >
+        <strong style={{ color: "var(--xm-tx-secondary)" }}>Repository analysis:</strong> Only public HTTPS repositories are supported.
+        Source code is cloned on the server, analysed with Semgrep, and the workspace is removed after analysis.
+        Source code from cloned repositories is never executed.
+        {" "}<strong style={{ color: "var(--xm-tx-secondary)" }}>Limitation:</strong> SSRF protection uses DNS pre-validation;
+        DNS rebinding is not fully mitigated. Ensure the server's egress firewall blocks RFC 1918 ranges.
       </div>
     </div>
   )

@@ -184,7 +184,7 @@ class AnthropicProvider(AiProvider):
         self._timeout = timeout
         self._max_tokens = max_tokens
 
-    async def _call(self, system: str, user_message: str) -> str:
+    async def _call(self, system: str, user_message: str, max_tokens: int | None = None) -> str:
         headers = {
             "x-api-key": self._api_key,
             "anthropic-version": self._API_VERSION,
@@ -192,7 +192,7 @@ class AnthropicProvider(AiProvider):
         }
         body = {
             "model": self._model,
-            "max_tokens": self._max_tokens,
+            "max_tokens": max_tokens if max_tokens is not None else self._max_tokens,
             "system": system,
             "messages": [{"role": "user", "content": user_message}],
         }
@@ -243,7 +243,7 @@ class AnthropicProvider(AiProvider):
     async def generate_fix(self, ctx: FixContext) -> FixResult:
         system = _build_fix_system()
         user = _build_fix_user(ctx)
-        raw = await self._call(system, user)
+        raw = await self._call(system, user, max_tokens=settings.LLM_FIX_MAX_TOKENS)
         return _parse_fix_response(raw, "anthropic", self._model)
 
 
@@ -261,7 +261,7 @@ class OllamaProvider(AiProvider):
         self._timeout = timeout
         self._max_tokens = max_tokens
 
-    async def _call(self, system: str, user_message: str, json_mode: bool = False) -> str:
+    async def _call(self, system: str, user_message: str, json_mode: bool = False, max_tokens: int | None = None) -> str:
         body = {
                 "model": self._model,
                 "messages": [
@@ -269,7 +269,7 @@ class OllamaProvider(AiProvider):
                     {"role": "user", "content": user_message},
             ],
             "stream": False,
-            "options": {"num_predict": self._max_tokens},
+            "options": {"num_predict": max_tokens if max_tokens is not None else self._max_tokens},
         }
 
         if json_mode:
@@ -341,7 +341,7 @@ class OllamaProvider(AiProvider):
     async def generate_fix(self, ctx: FixContext) -> FixResult:
         system = _build_fix_system()
         user = _build_fix_user(ctx)
-        raw = await self._call(system, user, json_mode=True)
+        raw = await self._call(system, user, json_mode=True, max_tokens=settings.LLM_FIX_MAX_TOKENS)
         return _parse_fix_response(raw, "ollama", self._model)
 
 

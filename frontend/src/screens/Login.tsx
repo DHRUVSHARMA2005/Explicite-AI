@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useNav } from "../App"
-import { CodeIcon } from "../components/Icons"
+import { CodeIcon, ShieldIcon } from "../components/Icons"
 import { apiLogin, ApiError } from "../lib/api"
 
 export default function Login() {
@@ -30,59 +30,108 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-full bg-gray-50 flex items-center justify-center">
-      <div className="w-80">
+    <div
+      className="min-h-full flex items-center justify-center px-4"
+      style={{ backgroundColor: "var(--xm-bg-app)" }}
+    >
+      <div className="w-full max-w-sm">
+
+        {/* Brand mark */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-10 h-10 bg-blue-600 rounded mb-3">
-            <CodeIcon className="w-5 h-5 text-white" />
+          <div
+            className="inline-flex items-center justify-center w-12 h-12 rounded-xl mb-4"
+            style={{ backgroundColor: "var(--xm-accent)", boxShadow: "0 0 32px var(--xm-accent-subtle)" }}
+          >
+            <CodeIcon className="w-6 h-6 text-white" />
           </div>
-          <h1 className="text-xl font-semibold text-gray-900">CodeReview AI</h1>
-          <p className="text-sm text-gray-500 mt-1">AI-Powered Code Review Assistant</p>
+          <h1 className="text-2xl font-semibold tracking-tight" style={{ color: "var(--xm-tx-primary)" }}>
+            Explicite AI
+          </h1>
+          <p className="text-sm mt-1" style={{ color: "var(--xm-tx-muted)" }}>
+            Code intelligence platform
+          </p>
         </div>
-        <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded p-6">
-          <div className="space-y-4">
+
+        {/* Form card */}
+        <div
+          className="rounded-xl p-6"
+          style={{
+            backgroundColor: "var(--xm-bg-surface)",
+            border: "1px solid var(--xm-border)",
+          }}
+        >
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Email address</label>
+              <label
+                className="block text-xs font-medium mb-1.5"
+                style={{ color: "var(--xm-tx-secondary)" }}
+              >
+                Email address
+              </label>
               <input
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 disabled={loading}
-                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                autoComplete="email"
+                className="xm-input"
               />
             </div>
             <div>
-              <div className="flex justify-between mb-1">
-                <label className="block text-xs font-medium text-gray-700">Password</label>
-                <button type="button" className="text-xs text-blue-600 hover:underline">Forgot password?</button>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-medium" style={{ color: "var(--xm-tx-secondary)" }}>
+                  Password
+                </label>
               </div>
               <input
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 disabled={loading}
-                className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                autoComplete="current-password"
+                className="xm-input"
               />
             </div>
+
             {error && (
-              <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+              <div
+                className="text-xs rounded px-3 py-2.5"
+                style={{
+                  backgroundColor: "var(--xm-err-sub)",
+                  border: "1px solid var(--xm-err)",
+                  color: "var(--xm-err)",
+                  borderColor: "color-mix(in srgb, var(--xm-err) 40%, transparent)",
+                }}
+              >
                 {error}
               </div>
             )}
+
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 text-white py-2 rounded text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              className="xm-btn xm-btn-primary w-full py-2.5 mt-1 text-sm font-medium"
             >
-              {loading ? "Signing in…" : "Sign in"}
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="xm-spin w-4 h-4" fill="none" viewBox="0 0 24 24" aria-hidden>
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                  </svg>
+                  Signing in…
+                </span>
+              ) : "Sign in"}
             </button>
-          </div>
-          <p className="text-center text-xs text-gray-500 mt-4">
-            {"Don't have an account? "}
-            <button type="button" className="text-blue-600 hover:underline">Sign up</button>
+          </form>
+        </div>
+
+        {/* Security note */}
+        <div className="flex items-center justify-center gap-1.5 mt-5">
+          <ShieldIcon className="w-3.5 h-3.5" style={{ color: "var(--xm-tx-muted)" } as React.CSSProperties} />
+          <p className="text-xs" style={{ color: "var(--xm-tx-muted)" }}>
+            Secured · Sessions expire on tab close
           </p>
-        </form>
-        <p className="text-center text-xs text-gray-400 mt-4">University Software Engineering Project — v1.0</p>
+        </div>
       </div>
     </div>
   )

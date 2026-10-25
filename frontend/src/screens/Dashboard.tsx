@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useNav } from "../App"
 import SeverityBadge from "../components/SeverityBadge"
+import { CheckIcon, XIcon, ClockIcon, AnalyzeIcon, IssuesIcon, ChatIcon, BookIcon, UploadIcon } from "../components/Icons"
 import {
   apiGetDashboard,
   apiSubmitAnalysis,
@@ -11,145 +12,205 @@ import {
   ApiError,
 } from "../lib/api"
 
-function StatCard({ label, value, color, sub }: { label: string; value: string | number; color: string; sub?: string }) {
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function formatAnalysisDate(iso: string | null): string {
+  if (!iso) return "Never"
+  try {
+    return new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+  } catch { return iso }
+}
+
+// ── Metric card ───────────────────────────────────────────────────────────────
+
+function MetricCard({ label, value, accent, sub }: {
+  label: string
+  value: string | number
+  accent: string
+  sub?: string
+}) {
   return (
-    <div className="bg-white border border-gray-200 rounded p-4">
-      <div className="text-xs text-gray-400 font-medium uppercase tracking-wide">{label}</div>
-      <div className={`text-2xl font-bold mt-1 ${color}`}>{value}</div>
-      {sub && <div className="text-xs text-gray-400 mt-0.5">{sub}</div>}
+    <div
+      className="rounded-lg p-4 flex flex-col gap-1"
+      style={{ backgroundColor: "var(--xm-bg-surface)", border: "1px solid var(--xm-border)" }}
+    >
+      <div className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--xm-tx-muted)" }}>
+        {label}
+      </div>
+      <div className="text-2xl font-bold" style={{ color: accent }}>
+        {value}
+      </div>
+      {sub && (
+        <div className="text-[11px]" style={{ color: "var(--xm-tx-muted)" }}>{sub}</div>
+      )}
     </div>
   )
 }
 
-function RiskScoreCard({ score, version, openFindings }: { score: number | null; version: string | null; openFindings: number }) {
+// ── Risk score card ───────────────────────────────────────────────────────────
+
+function RiskCard({ score, version, openFindings }: { score: number | null; version: string | null; openFindings: number }) {
   if (score === null) {
     return (
-      <div className="bg-white border border-gray-200 rounded p-4">
-        <div className="text-xs text-gray-400 font-medium uppercase tracking-wide">Project Risk Score</div>
-        <div className="text-2xl font-bold mt-1 text-gray-400">—</div>
-        <div className="text-xs text-gray-400 mt-0.5">No analysis yet</div>
+      <div
+        className="rounded-lg p-4 flex flex-col gap-1"
+        style={{ backgroundColor: "var(--xm-bg-surface)", border: "1px solid var(--xm-border)" }}
+      >
+        <div className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--xm-tx-muted)" }}>
+          Project Risk Score
+        </div>
+        <div className="text-2xl font-bold" style={{ color: "var(--xm-tx-muted)" }}>—</div>
+        <div className="text-[11px]" style={{ color: "var(--xm-tx-muted)" }}>No analysis yet</div>
       </div>
     )
   }
 
   const band =
-    score >= 75 ? { label: "Critical Risk", color: "text-red-600", bar: "bg-red-500" } :
-    score >= 50 ? { label: "High Risk",     color: "text-orange-600", bar: "bg-orange-500" } :
-    score >= 25 ? { label: "Moderate Risk", color: "text-yellow-600", bar: "bg-yellow-500" } :
-                  { label: "Low Risk",      color: "text-green-600",  bar: "bg-green-500" }
+    score >= 75 ? { label: "Critical Risk", color: "var(--xm-critical)", bar: "var(--xm-critical)" } :
+    score >= 50 ? { label: "High Risk",     color: "var(--xm-high)",     bar: "var(--xm-high)" } :
+    score >= 25 ? { label: "Moderate Risk", color: "var(--xm-medium)",   bar: "var(--xm-medium)" } :
+                  { label: "Low Risk",      color: "var(--xm-ok)",       bar: "var(--xm-ok)" }
 
   return (
-    <div className="bg-white border border-gray-200 rounded p-4">
-      <div className="text-xs text-gray-400 font-medium uppercase tracking-wide">Project Risk Score</div>
-      <div className={`text-2xl font-bold mt-1 ${band.color}`}>{score.toFixed(1)} <span className="text-base font-normal text-gray-400">/ 100</span></div>
-      <div className="mt-2 h-1.5 rounded-full bg-gray-100 overflow-hidden">
-        <div className={`h-full rounded-full ${band.bar}`} style={{ width: `${score}%` }} />
+    <div
+      className="rounded-lg p-4 flex flex-col gap-2"
+      style={{ backgroundColor: "var(--xm-bg-surface)", border: "1px solid var(--xm-border)" }}
+    >
+      <div className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--xm-tx-muted)" }}>
+        Project Risk Score
       </div>
-      <div className="text-xs text-gray-400 mt-1.5">
+      <div className="text-2xl font-bold" style={{ color: band.color }}>
+        {score.toFixed(1)}
+        <span className="text-sm font-normal ml-1" style={{ color: "var(--xm-tx-muted)" }}>/ 100</span>
+      </div>
+      <div
+        className="h-1.5 rounded-full overflow-hidden"
+        style={{ backgroundColor: "var(--xm-bg-elevated)" }}
+      >
+        <div
+          className="h-full rounded-full transition-all"
+          style={{ width: `${score}%`, backgroundColor: band.color }}
+        />
+      </div>
+      <div className="text-[11px]" style={{ color: "var(--xm-tx-muted)" }}>
         {band.label} · {openFindings} unresolved{version ? ` · model ${version}` : ""}
       </div>
     </div>
   )
 }
 
-function SecondaryStatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+// ── Supporting metric card ────────────────────────────────────────────────────
+
+function SupportCard({ label, value, sub, unavailable }: {
+  label: string
+  value: string
+  sub?: string
+  unavailable?: boolean
+}) {
   return (
-    <div className="bg-white border border-gray-100 rounded px-4 py-3">
-      <div className="text-xs text-gray-400 font-medium uppercase tracking-wide">{label}</div>
-      <div className="text-base font-semibold text-gray-600 mt-0.5">{value}</div>
-      {sub && <div className="text-xs text-gray-400 mt-0.5">{sub}</div>}
+    <div
+      className="rounded-lg px-4 py-3"
+      style={{ backgroundColor: "var(--xm-bg-surface)", border: "1px solid var(--xm-border)" }}
+    >
+      <div className="text-[11px] font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--xm-tx-muted)" }}>
+        {label}
+      </div>
+      <div
+        className="text-base font-semibold"
+        style={{ color: unavailable ? "var(--xm-tx-muted)" : "var(--xm-tx-primary)" }}
+      >
+        {value}
+      </div>
+      {sub && (
+        <div className="text-[11px] mt-0.5 leading-relaxed" style={{ color: "var(--xm-tx-muted)" }}>{sub}</div>
+      )}
     </div>
   )
 }
 
-function formatAnalysisDate(iso: string | null): string {
-  if (!iso) return "—"
-  try {
-    return new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
-  } catch { return iso }
-}
+// ── Analysis modal ────────────────────────────────────────────────────────────
 
-function AnalysisModal({
-  onClose,
-  onSubmit,
-}: {
-  onClose: () => void
-  onSubmit: (file: File) => void
-}) {
+function AnalysisModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (file: File) => void }) {
   const [file, setFile] = useState<File | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={onClose}>
+    <div
+      className="fixed inset-0 flex items-center justify-center z-50"
+      style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
+      onClick={onClose}
+    >
       <div
-        className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4"
+        className="w-full max-w-md mx-4 rounded-xl shadow-2xl"
+        style={{ backgroundColor: "var(--xm-bg-elevated)", border: "1px solid var(--xm-border)" }}
         onClick={e => e.stopPropagation()}
       >
-        <h3 className="text-base font-semibold text-gray-900 mb-1">Run Analysis</h3>
-        <p className="text-sm text-gray-500 mb-4">
-          Upload a ZIP archive of your source files (max 10 MB). Supported: .py .java .js .ts .jsx .tsx
-        </p>
-        <div
-          className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors mb-4"
-          onClick={() => inputRef.current?.click()}
-        >
-          {file ? (
-            <div className="text-sm text-gray-700 font-medium">{file.name} ({(file.size / 1024).toFixed(0)} KB)</div>
-          ) : (
-            <>
-              <div className="text-gray-400 text-sm">Click to select a ZIP file</div>
-              <div className="text-xs text-gray-400 mt-1">or drag and drop</div>
-            </>
-          )}
+        <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--xm-border)" }}>
+          <h3 className="text-sm font-semibold" style={{ color: "var(--xm-tx-primary)" }}>Run Analysis</h3>
+          <button onClick={onClose} className="text-lg leading-none" style={{ color: "var(--xm-tx-muted)" }}>×</button>
         </div>
-        <input
-          ref={inputRef}
-          type="file"
-          accept=".zip,application/zip"
-          className="hidden"
-          onChange={e => setFile(e.target.files?.[0] ?? null)}
-        />
-        <div className="flex gap-3 justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 text-sm text-gray-600 border border-gray-200 rounded hover:bg-gray-50"
+        <div className="p-5 space-y-4">
+          <p className="text-sm" style={{ color: "var(--xm-tx-secondary)" }}>
+            Upload a ZIP archive of your source files (max 10 MB). Supported: <span className="xm-mono">.py .java .js .ts .jsx .tsx</span>
+          </p>
+          <div
+            className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors"
+            style={{ borderColor: "var(--xm-border)" }}
+            onClick={() => inputRef.current?.click()}
+            onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "var(--xm-accent)"; (e.currentTarget as HTMLDivElement).style.backgroundColor = "var(--xm-accent-subtle)" }}
+            onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "var(--xm-border)"; (e.currentTarget as HTMLDivElement).style.backgroundColor = "transparent" }}
           >
-            Cancel
-          </button>
-          <button
-            disabled={!file}
-            onClick={() => file && onSubmit(file)}
-            className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Start Analysis
-          </button>
+            {file ? (
+              <div className="text-sm font-medium" style={{ color: "var(--xm-tx-primary)" }}>
+                {file.name} <span style={{ color: "var(--xm-tx-muted)" }}>({(file.size / 1024).toFixed(0)} KB)</span>
+              </div>
+            ) : (
+              <>
+                <UploadIcon className="w-8 h-8 mx-auto mb-2" style={{ color: "var(--xm-tx-muted)" } as React.CSSProperties} />
+                <div className="text-sm" style={{ color: "var(--xm-tx-muted)" }}>Click to select a ZIP file</div>
+                <div className="text-xs mt-1" style={{ color: "var(--xm-tx-muted)" }}>or drag and drop</div>
+              </>
+            )}
+          </div>
+          <input ref={inputRef} type="file" accept=".zip,application/zip" className="hidden" onChange={e => setFile(e.target.files?.[0] ?? null)} />
+          <div className="flex gap-3 justify-end">
+            <button onClick={onClose} className="xm-btn xm-btn-secondary">Cancel</button>
+            <button
+              disabled={!file}
+              onClick={() => file && onSubmit(file)}
+              className="xm-btn xm-btn-primary"
+            >
+              Start Analysis
+            </button>
+          </div>
         </div>
       </div>
     </div>
   )
 }
 
-function JobStatusBar({ job, onDismiss }: { job: ApiAnalysisJob; onDismiss: () => void }) {
+// ── Job status banner ─────────────────────────────────────────────────────────
+
+function JobBanner({ job, onDismiss }: { job: ApiAnalysisJob; onDismiss: () => void }) {
   const isTerminal = job.status === "completed" || job.status === "failed"
-  const color = job.status === "completed"
-    ? "bg-green-50 border-green-200 text-green-800"
-    : job.status === "failed"
-    ? "bg-red-50 border-red-200 text-red-800"
-    : "bg-blue-50 border-blue-200 text-blue-800"
+  const bg   = job.status === "completed" ? "var(--xm-ok-sub)"   : job.status === "failed" ? "var(--xm-err-sub)" : "var(--xm-info-sub)"
+  const border = job.status === "completed" ? "var(--xm-ok)"     : job.status === "failed" ? "var(--xm-err)"     : "var(--xm-info)"
+  const text   = job.status === "completed" ? "var(--xm-ok)"     : job.status === "failed" ? "var(--xm-err)"     : "var(--xm-info)"
 
   const label =
-    job.status === "queued" ? "Analysis queued…"
-    : job.status === "running" ? "Analysis running…"
-    : job.status === "completed"
-    ? `Analysis complete — ${job.findings_count ?? 0} finding${job.findings_count !== 1 ? "s" : ""}`
-    : `Analysis failed: ${job.failure_reason ?? "unknown error"}`
-
+    job.status === "queued"    ? "Analysis queued…" :
+    job.status === "running"   ? "Analysis running…" :
+    job.status === "completed" ? `Analysis complete — ${job.findings_count ?? 0} finding${job.findings_count !== 1 ? "s" : ""}` :
+                                 `Analysis failed: ${job.failure_reason ?? "unknown error"}`
   return (
-    <div className={`border rounded px-4 py-2 text-sm flex items-center gap-3 mb-4 ${color}`}>
+    <div
+      className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm mb-4"
+      style={{ backgroundColor: bg, border: `1px solid color-mix(in srgb, ${border} 40%, transparent)`, color: text }}
+    >
       {!isTerminal && (
-        <svg className="w-4 h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+        <svg className="xm-spin w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" aria-hidden>
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
         </svg>
       )}
       <span className="flex-1">{label}</span>
@@ -159,6 +220,8 @@ function JobStatusBar({ job, onDismiss }: { job: ApiAnalysisJob; onDismiss: () =
     </div>
   )
 }
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
   const { token, selectedProjectId, navigate, openIssue, logout } = useNav()
@@ -186,7 +249,6 @@ export default function Dashboard() {
     return () => { cancelled = true }
   }, [token, selectedProjectId])
 
-  // Poll running job until terminal, then reload dashboard
   useEffect(() => {
     if (!currentJob || !token || !selectedProjectId) return
     if (currentJob.status === "completed" || currentJob.status === "failed") return
@@ -197,7 +259,6 @@ export default function Dashboard() {
           if (cancelled) return
           setCurrentJob(updated)
           if (updated.status === "completed") {
-            // Reload dashboard data to reflect new findings
             apiGetDashboard(token, selectedProjectId)
               .then(d => { if (!cancelled) setData(d) })
               .catch(() => {})
@@ -220,24 +281,39 @@ export default function Dashboard() {
     }
   }
 
+  function handleIssueClick(issue: ApiIssueSummary) { openIssue(issue.id, issue) }
+
   if (!selectedProjectId) {
     return (
-      <div className="p-6 max-w-6xl mx-auto">
-        <div className="text-sm text-gray-400 py-12 text-center">
-          Select a project from the <button onClick={() => navigate("projects")} className="text-blue-600 hover:underline">Projects</button> page.
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <FolderEmptyState navigate={navigate} />
         </div>
       </div>
     )
   }
 
   if (loading) {
-    return <div className="p-6 text-sm text-gray-400 text-center py-12">Loading dashboard…</div>
+    return (
+      <div className="p-6 max-w-6xl mx-auto">
+        <div className="grid grid-cols-4 gap-4 mb-4">
+          {[...Array(4)].map((_, i) => <div key={i} className="xm-skeleton h-24 rounded-lg" />)}
+        </div>
+        <div className="xm-skeleton h-48 rounded-lg mb-4" />
+        <div className="xm-skeleton h-64 rounded-lg" />
+      </div>
+    )
   }
 
   if (error) {
     return (
       <div className="p-6 max-w-6xl mx-auto">
-        <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-4 py-3">{error}</div>
+        <div
+          className="text-sm rounded-lg px-4 py-3"
+          style={{ backgroundColor: "var(--xm-err-sub)", border: "1px solid color-mix(in srgb, var(--xm-err) 40%, transparent)", color: "var(--xm-err)" }}
+        >
+          {error}
+        </div>
       </div>
     )
   }
@@ -246,96 +322,146 @@ export default function Dashboard() {
 
   const { metrics: m, supporting_metrics: sm, quality_gate: qg } = data
   const vulnSub = m.critical_vulnerabilities > 0 || m.high_vulnerabilities > 0
-    ? `${m.critical_vulnerabilities} Critical, ${m.high_vulnerabilities} High`
+    ? `${m.critical_vulnerabilities} critical · ${m.high_vulnerabilities} high`
     : undefined
-
-  function handleIssueClick(issue: ApiIssueSummary) {
-    openIssue(issue.id, issue)
-  }
-
   const jobRunning = currentJob && currentJob.status !== "completed" && currentJob.status !== "failed"
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      {showModal && (
-        <AnalysisModal onClose={() => setShowModal(false)} onSubmit={handleSubmit} />
-      )}
-      <div className="flex items-center justify-between mb-5">
+      {showModal && <AnalysisModal onClose={() => setShowModal(false)} onSubmit={handleSubmit} />}
+
+      {/* Page header */}
+      <div className="flex items-start justify-between mb-6">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Project Dashboard</h2>
-          <p className="text-sm text-gray-500">
-            {data.project_name} · Last analysis: {formatAnalysisDate(data.last_analysis_at)}
+          <h2 className="text-xl font-semibold tracking-tight" style={{ color: "var(--xm-tx-primary)" }}>
+            Code Intelligence
+          </h2>
+          <p className="text-sm mt-0.5" style={{ color: "var(--xm-tx-secondary)" }}>
+            {data.project_name}
+            {data.last_analysis_at && (
+              <span style={{ color: "var(--xm-tx-muted)" }}>
+                {" "}· Last analysis {formatAnalysisDate(data.last_analysis_at)}
+              </span>
+            )}
           </p>
         </div>
         <button
           disabled={!!jobRunning}
           onClick={() => setShowModal(true)}
-          className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="xm-btn xm-btn-primary"
         >
-          {jobRunning ? "Analysis running…" : "Run Analysis"}
+          <AnalyzeIcon className="w-4 h-4" />
+          {jobRunning ? "Analysing…" : "Run Analysis"}
         </button>
       </div>
+
       {submitError && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded px-4 py-2 mb-4">
-          {submitError}
-          <button onClick={() => setSubmitError(null)} className="ml-3 text-xs underline">Dismiss</button>
+        <div
+          className="text-sm rounded-lg px-4 py-2.5 mb-4 flex items-center justify-between"
+          style={{ backgroundColor: "var(--xm-err-sub)", border: "1px solid color-mix(in srgb, var(--xm-err) 40%, transparent)", color: "var(--xm-err)" }}
+        >
+          <span>{submitError}</span>
+          <button onClick={() => setSubmitError(null)} className="text-xs underline ml-3">Dismiss</button>
         </div>
       )}
-      {currentJob && (
-        <JobStatusBar job={currentJob} onDismiss={() => setCurrentJob(null)} />
-      )}
+      {currentJob && <JobBanner job={currentJob} onDismiss={() => setCurrentJob(null)} />}
 
-      {/* Project Health */}
-      <div className="bg-white border border-gray-200 rounded p-4 mb-5">
-        <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Project Health</div>
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-3">
-            <div className={`w-4 h-4 rounded-full shrink-0 ${qg.passed ? "bg-green-500" : "bg-red-500"}`} />
-            <div>
-              <div className="font-semibold text-gray-900 text-base">
-                Quality Gate: {qg.passed ? "Passed" : "Failed"}
+      {/* Quality gate strip */}
+      <div
+        className="rounded-lg px-5 py-4 mb-5 flex items-center gap-5 flex-wrap"
+        style={{ backgroundColor: "var(--xm-bg-surface)", border: "1px solid var(--xm-border)" }}
+      >
+        <div className="flex items-center gap-3">
+          <div
+            className="w-8 h-8 rounded-full flex items-center justify-center"
+            style={{ backgroundColor: qg.passed ? "var(--xm-ok-sub)" : "var(--xm-err-sub)" }}
+          >
+            {qg.passed
+              ? <CheckIcon className="w-4 h-4" style={{ color: "var(--xm-ok)" } as React.CSSProperties} />
+              : <XIcon className="w-4 h-4" style={{ color: "var(--xm-err)" } as React.CSSProperties} />}
+          </div>
+          <div>
+            <div className="text-sm font-semibold" style={{ color: "var(--xm-tx-primary)" }}>
+              Quality Gate: <span style={{ color: qg.passed ? "var(--xm-ok)" : "var(--xm-err)" }}>
+                {qg.passed ? "Passed" : "Failed"}
+              </span>
+            </div>
+            {qg.failed_conditions.length > 0 && (
+              <div className="text-xs mt-0.5" style={{ color: "var(--xm-tx-muted)" }}>
+                {qg.failed_conditions.length} condition{qg.failed_conditions.length !== 1 ? "s" : ""} failed — {qg.failed_conditions.join(", ")}
               </div>
-              {qg.failed_conditions.length > 0 && (
-                <div className="text-xs text-gray-500 mt-0.5">
-                  {qg.failed_conditions.length} condition{qg.failed_conditions.length !== 1 ? "s" : ""} failed — {qg.failed_conditions.join(", ")}
-                </div>
-              )}
-            </div>
+            )}
           </div>
-          <div className="ml-auto flex gap-6 text-center shrink-0">
-            <div>
-              <div className="text-xs text-gray-400 uppercase tracking-wide">Analysis</div>
-              <div className="text-sm font-semibold text-gray-900 mt-0.5">{formatAnalysisDate(data.last_analysis_at)}</div>
+        </div>
+        <div className="ml-auto flex items-center gap-8 shrink-0">
+          {[
+            { label: "Branch", value: data.branch, mono: true },
+            { label: "Last analysis", value: formatAnalysisDate(data.last_analysis_at), mono: false },
+          ].map(({ label, value, mono }) => (
+            <div key={label} className="text-right">
+              <div className="text-[11px] uppercase tracking-wider mb-0.5" style={{ color: "var(--xm-tx-muted)" }}>{label}</div>
+              <div
+                className={`text-sm font-medium ${mono ? "font-mono" : ""}`}
+                style={{ color: "var(--xm-tx-primary)" }}
+              >
+                {value}
+              </div>
             </div>
-            <div>
-              <div className="text-xs text-gray-400 uppercase tracking-wide">Branch</div>
-              <div className="text-sm font-mono font-semibold text-gray-900 mt-0.5">{data.branch}</div>
-            </div>
-          </div>
+          ))}
         </div>
       </div>
 
-      {/* Primary metrics */}
-      <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Key Metrics</div>
-      <div className="grid grid-cols-4 gap-3 mb-3">
-        <StatCard label="Bugs" value={m.bugs} color="text-red-600" sub={m.bugs_delta !== null ? `${m.bugs_delta > 0 ? "+" : ""}${m.bugs_delta} since last analysis` : undefined} />
-        <StatCard label="Vulnerabilities" value={m.vulnerabilities} color="text-orange-600" sub={vulnSub} />
-        <StatCard label="Code Smells" value={m.code_smells} color="text-amber-600" sub={m.technical_debt_display ? `~${m.technical_debt_display} technical debt` : undefined} />
-        <StatCard label="Security Hotspots" value={m.security_hotspots} color="text-purple-600" sub={m.security_hotspots_needing_review > 0 ? `${m.security_hotspots_needing_review} need review` : undefined} />
+      {/* Key metrics */}
+      <div className="xm-section-label mb-3">Key Metrics</div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+        <MetricCard
+          label="Bugs"
+          value={m.bugs}
+          accent={m.bugs > 0 ? "var(--xm-err)" : "var(--xm-tx-secondary)"}
+          sub={m.bugs_delta !== null ? `${m.bugs_delta > 0 ? "+" : ""}${m.bugs_delta} since last` : undefined}
+        />
+        <MetricCard
+          label="Vulnerabilities"
+          value={m.vulnerabilities}
+          accent={m.vulnerabilities > 0 ? "var(--xm-high)" : "var(--xm-tx-secondary)"}
+          sub={vulnSub}
+        />
+        <MetricCard
+          label="Code Smells"
+          value={m.code_smells}
+          accent={m.code_smells > 0 ? "var(--xm-medium)" : "var(--xm-tx-secondary)"}
+          sub={m.technical_debt_display ? `~${m.technical_debt_display} debt` : undefined}
+        />
+        <MetricCard
+          label="Security Hotspots"
+          value={m.security_hotspots}
+          accent={m.security_hotspots > 0 ? "var(--xm-info)" : "var(--xm-tx-secondary)"}
+          sub={m.security_hotspots_needing_review > 0 ? `${m.security_hotspots_needing_review} need review` : undefined}
+        />
       </div>
+
+      {/* Risk + severity breakdown */}
       <div className="grid grid-cols-4 gap-3 mb-5">
-        <RiskScoreCard score={data.risk_score} version={data.risk_score_version} openFindings={data.open_findings} />
+        <RiskCard score={data.risk_score} version={data.risk_score_version} openFindings={data.open_findings} />
         {Object.keys(data.findings_by_severity).length > 0 && (
-          <div className="col-span-3 bg-white border border-gray-200 rounded p-4">
-            <div className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-2">Findings by Severity</div>
-            <div className="flex gap-4 flex-wrap">
+          <div
+            className="col-span-3 rounded-lg p-4"
+            style={{ backgroundColor: "var(--xm-bg-surface)", border: "1px solid var(--xm-border)" }}
+          >
+            <div className="xm-section-label mb-3">Findings by Severity</div>
+            <div className="flex gap-3 flex-wrap">
               {(["Critical","High","Medium","Low"] as const).map(sev => {
                 const count = data.findings_by_severity[sev] ?? 0
                 if (count === 0) return null
-                const colors: Record<string, string> = { Critical: "bg-red-100 text-red-700", High: "bg-orange-100 text-orange-700", Medium: "bg-yellow-100 text-yellow-700", Low: "bg-green-100 text-green-700" }
+                const colorVar = sev === "Critical" ? "var(--xm-critical)" : sev === "High" ? "var(--xm-high)" : sev === "Medium" ? "var(--xm-medium)" : "var(--xm-low)"
+                const bgVar = sev === "Critical" ? "var(--xm-critical-bg)" : sev === "High" ? "var(--xm-high-bg)" : sev === "Medium" ? "var(--xm-medium-bg)" : "var(--xm-low-bg)"
                 return (
-                  <div key={sev} className={`px-3 py-1.5 rounded text-sm font-semibold ${colors[sev]}`}>
-                    {sev}: {count}
+                  <div
+                    key={sev}
+                    className="px-3 py-2 rounded-lg text-sm font-semibold"
+                    style={{ backgroundColor: bgVar, color: colorVar }}
+                  >
+                    {sev} <span className="font-mono ml-1">{count}</span>
                   </div>
                 )
               })}
@@ -344,41 +470,72 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Priority Issues */}
-      <div className="bg-white border border-gray-200 rounded mb-5">
-        <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+      {/* Priority issues */}
+      <div
+        className="rounded-lg overflow-hidden mb-5"
+        style={{ border: "1px solid var(--xm-border)" }}
+      >
+        <div
+          className="px-5 py-3.5 flex items-center justify-between"
+          style={{ borderBottom: "1px solid var(--xm-border)", backgroundColor: "var(--xm-bg-surface)" }}
+        >
           <div>
-            <h3 className="font-semibold text-gray-900 text-sm">Priority Issues</h3>
-            <p className="text-xs text-gray-400 mt-0.5">Highest severity issues requiring immediate attention</p>
+            <h3 className="text-sm font-semibold" style={{ color: "var(--xm-tx-primary)" }}>Priority Issues</h3>
+            <p className="text-[11px] mt-0.5" style={{ color: "var(--xm-tx-muted)" }}>
+              Critical and High severity findings requiring attention
+            </p>
           </div>
-          <button onClick={() => navigate("issues")} className="text-xs text-blue-600 hover:underline">View all issues →</button>
+          <button
+            onClick={() => navigate("issues")}
+            className="text-xs font-medium transition-colors"
+            style={{ color: "var(--xm-accent)" }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "var(--xm-accent-hover)" }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "var(--xm-accent)" }}
+          >
+            View all →
+          </button>
         </div>
         {data.priority_issues.length === 0 ? (
-          <div className="px-4 py-8 text-center text-sm text-gray-400">No open critical or high issues.</div>
+          <div className="px-5 py-10 text-center text-sm" style={{ backgroundColor: "var(--xm-bg-surface)", color: "var(--xm-tx-muted)" }}>
+            No open critical or high severity issues.
+          </div>
         ) : (
-          <table className="w-full">
+          <table className="w-full" style={{ backgroundColor: "var(--xm-bg-surface)" }}>
             <thead>
-              <tr className="text-xs text-gray-400 border-b border-gray-100 bg-gray-50">
-                {["Severity", "Issue", "File", "Line", "Action"].map(h => (
-                  <th key={h} className="text-left px-4 py-2 font-medium">{h}</th>
+              <tr style={{ borderBottom: "1px solid var(--xm-border)" }}>
+                {["Severity", "Issue", "File", "Line", ""].map(h => (
+                  <th key={h} className="text-left px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--xm-tx-muted)" }}>
+                    {h}
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {data.priority_issues.map(issue => (
+              {data.priority_issues.map((issue, idx) => (
                 <tr
                   key={issue.id}
-                  className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
+                  className="cursor-pointer transition-colors"
+                  style={{ borderBottom: idx < data.priority_issues.length - 1 ? "1px solid var(--xm-border-sub)" : "none" }}
                   onClick={() => handleIssueClick(issue)}
+                  onMouseEnter={e => { (e.currentTarget as HTMLTableRowElement).style.backgroundColor = "var(--xm-bg-hover)" }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLTableRowElement).style.backgroundColor = "transparent" }}
                 >
-                  <td className="px-4 py-2.5"><SeverityBadge severity={issue.severity} /></td>
-                  <td className="px-4 py-2.5 text-sm font-medium text-gray-900">{issue.title}</td>
-                  <td className="px-4 py-2.5 text-xs font-mono text-gray-500">{issue.file ?? "—"}</td>
-                  <td className="px-4 py-2.5 text-sm text-gray-500">{issue.line ?? "—"}</td>
-                  <td className="px-4 py-2.5">
+                  <td className="px-5 py-3"><SeverityBadge severity={issue.severity} /></td>
+                  <td className="px-5 py-3">
+                    <div className="text-sm font-medium" style={{ color: "var(--xm-tx-primary)" }}>{issue.title}</div>
+                    <div className="text-xs mt-0.5" style={{ color: "var(--xm-tx-muted)" }}>{issue.type}</div>
+                  </td>
+                  <td className="px-5 py-3">
+                    <span className="font-mono text-xs" style={{ color: "var(--xm-tx-secondary)" }}>{issue.file ?? "—"}</span>
+                  </td>
+                  <td className="px-5 py-3 text-sm" style={{ color: "var(--xm-tx-secondary)" }}>{issue.line ?? "—"}</td>
+                  <td className="px-5 py-3">
                     <button
-                      className="text-xs text-blue-600 hover:underline"
+                      className="text-xs font-medium transition-colors"
+                      style={{ color: "var(--xm-accent)" }}
                       onClick={e => { e.stopPropagation(); handleIssueClick(issue) }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "var(--xm-accent-hover)" }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "var(--xm-accent)" }}
                     >
                       View →
                     </button>
@@ -391,41 +548,86 @@ export default function Dashboard() {
       </div>
 
       {/* Supporting metrics */}
-      <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Supporting Metrics</div>
+      <div className="xm-section-label mb-3">Supporting Metrics</div>
       <div className="grid grid-cols-3 gap-3 mb-5">
-        <SecondaryStatCard
+        <SupportCard
           label="Coverage"
-          value={sm.coverage_pct !== null ? `${sm.coverage_pct.toFixed(1)}%` : "—"}
-          sub={sm.coverage_target_pct !== null ? `Target: ${sm.coverage_target_pct}%` : undefined}
+          value={sm.coverage_pct !== null ? `${sm.coverage_pct.toFixed(1)}%` : "Not available"}
+          unavailable={sm.coverage_pct === null}
+          sub={sm.coverage_pct !== null
+            ? sm.coverage_target_pct != null ? `Target: ${sm.coverage_target_pct}%` : undefined
+            : sm.coverage_message ?? "Requires a test coverage report"}
         />
-        <SecondaryStatCard
+        <SupportCard
           label="Duplications"
-          value={sm.duplications_pct !== null ? `${sm.duplications_pct.toFixed(1)}%` : "—"}
+          value={sm.duplications_pct !== null ? `${sm.duplications_pct.toFixed(1)}%` : "Not available"}
+          unavailable={sm.duplications_pct === null}
+          sub={sm.duplications_pct !== null ? "Source-level block detection" : sm.duplications_message ?? "No duplication data"}
         />
-        <SecondaryStatCard
+        <SupportCard
           label="Technical Debt"
-          value={sm.technical_debt_display ?? "—"}
-          sub={sm.maintainability_rating ? `Maintainability: ${sm.maintainability_rating}` : undefined}
+          value={sm.technical_debt_display ?? "Not available"}
+          unavailable={!sm.technical_debt_display}
+          sub={sm.technical_debt_display
+            ? sm.technical_debt_is_estimate ? "Estimate based on finding weights" : undefined
+            : "No findings data"}
         />
       </div>
 
       {/* Quick actions */}
       <div className="grid grid-cols-3 gap-3">
-        {[
-          { title: "Review Issues", sub: `${m.bugs + m.vulnerabilities} open issues need attention`, screen: "issues" as const },
-          { title: "Ask AI Assistant", sub: "Get explanations and fix guidance", screen: "ai-assistant" as const },
-          { title: "Learning Resources", sub: "4 resources recommended for you", screen: "learning" as const },
-        ].map(a => (
+        {([
+          { title: "Review Findings", sub: `${m.bugs + m.vulnerabilities} open findings`, screen: "issues" as const, Icon: IssuesIcon },
+          { title: "AI Assistant",    sub: "Ask about security issues",              screen: "ai-assistant" as const, Icon: ChatIcon },
+          { title: "Learning",        sub: "Security & quality resources",           screen: "learning" as const, Icon: BookIcon },
+        ] as const).map(a => (
           <button
             key={a.screen}
             onClick={() => navigate(a.screen)}
-            className="bg-white border border-gray-200 rounded p-3 text-left hover:border-blue-300 hover:bg-blue-50 transition-colors"
+            className="rounded-lg p-4 text-left transition-colors"
+            style={{ backgroundColor: "var(--xm-bg-surface)", border: "1px solid var(--xm-border)" }}
+            onMouseEnter={e => {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--xm-accent-border)"
+              ;(e.currentTarget as HTMLButtonElement).style.backgroundColor = "var(--xm-accent-subtle)"
+            }}
+            onMouseLeave={e => {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--xm-border)"
+              ;(e.currentTarget as HTMLButtonElement).style.backgroundColor = "var(--xm-bg-surface)"
+            }}
           >
-            <div className="text-sm font-medium text-gray-900">{a.title}</div>
-            <div className="text-xs text-gray-500 mt-0.5">{a.sub}</div>
+            <div className="flex items-center gap-2 mb-1">
+              <a.Icon className="w-4 h-4" style={{ color: "var(--xm-accent)" } as React.CSSProperties} />
+              <div className="text-sm font-medium" style={{ color: "var(--xm-tx-primary)" }}>{a.title}</div>
+            </div>
+            <div className="text-xs" style={{ color: "var(--xm-tx-muted)" }}>{a.sub}</div>
           </button>
         ))}
       </div>
+    </div>
+  )
+}
+
+function FolderEmptyState({ navigate }: { navigate: (s: import("../App").Screen) => void }) {
+  return (
+    <div
+      className="max-w-sm mx-auto px-8 py-12 rounded-xl text-center"
+      style={{ backgroundColor: "var(--xm-bg-surface)", border: "1px solid var(--xm-border)" }}
+    >
+      <div
+        className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4"
+        style={{ backgroundColor: "var(--xm-accent-subtle)" }}
+      >
+        <AnalyzeIcon className="w-6 h-6" style={{ color: "var(--xm-accent)" } as React.CSSProperties} />
+      </div>
+      <h3 className="text-base font-semibold mb-2" style={{ color: "var(--xm-tx-primary)" }}>
+        No project selected
+      </h3>
+      <p className="text-sm mb-5" style={{ color: "var(--xm-tx-muted)" }}>
+        Select a project from the Projects page to view its dashboard.
+      </p>
+      <button onClick={() => navigate("projects")} className="xm-btn xm-btn-primary">
+        Browse Projects
+      </button>
     </div>
   )
 }

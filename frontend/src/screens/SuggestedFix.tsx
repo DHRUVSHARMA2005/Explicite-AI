@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { useNav } from "../App"
+import { CheckIcon, XIcon } from "../components/Icons"
 import {
   apiGetFix,
   apiApproveFix,
@@ -9,40 +10,36 @@ import {
   ApiError,
 } from "../lib/api"
 
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    proposed: "bg-blue-50 text-blue-700 border-blue-200",
-    approved: "bg-green-50 text-green-700 border-green-200",
-    rejected: "bg-red-50 text-red-700 border-red-200",
-    applied: "bg-purple-50 text-purple-700 border-purple-200",
-    stale: "bg-amber-50 text-amber-700 border-amber-200",
-    failed: "bg-gray-50 text-gray-600 border-gray-200",
+function FixStatusBadge({ status }: { status: string }) {
+  const map: Record<string, { color: string; bg: string }> = {
+    proposed: { color: "var(--xm-info)",   bg: "var(--xm-info-sub)" },
+    approved: { color: "var(--xm-ok)",     bg: "var(--xm-ok-sub)" },
+    rejected: { color: "var(--xm-err)",    bg: "var(--xm-err-sub)" },
+    applied:  { color: "var(--xm-accent)", bg: "var(--xm-accent-subtle)" },
+    stale:    { color: "var(--xm-warn)",   bg: "var(--xm-warn-sub)" },
+    failed:   { color: "var(--xm-tx-muted)", bg: "var(--xm-bg-elevated)" },
   }
-  const cls = styles[status] ?? "bg-gray-50 text-gray-600 border-gray-200"
+  const { color, bg } = map[status] ?? { color: "var(--xm-tx-muted)", bg: "var(--xm-bg-elevated)" }
   return (
-    <span className={`text-xs px-2 py-0.5 rounded border font-medium capitalize ${cls}`}>
+    <span className="text-xs px-2 py-0.5 rounded font-medium capitalize" style={{ color, backgroundColor: bg }}>
       {status}
     </span>
   )
 }
 
 function DiffView({ diff }: { diff: string }) {
-  if (!diff) {
-    return <p className="text-xs text-gray-400 italic p-4">No diff available.</p>
-  }
+  if (!diff) return <p className="text-xs italic p-4" style={{ color: "var(--xm-tx-muted)" }}>No diff available.</p>
   const lines = diff.split("\n")
   return (
     <div className="code-block leading-relaxed overflow-x-auto rounded">
       {lines.map((line, i) => {
-        let lineClass = ""
-        if (line.startsWith("+++") || line.startsWith("---")) lineClass = "code-line-header"
-        else if (line.startsWith("+")) lineClass = "code-line-add"
-        else if (line.startsWith("-")) lineClass = "code-line-remove"
-        else if (line.startsWith("@@")) lineClass = "code-line-meta"
+        let cls = ""
+        if (line.startsWith("+++") || line.startsWith("---")) cls = "code-line-header"
+        else if (line.startsWith("+")) cls = "code-line-add"
+        else if (line.startsWith("-")) cls = "code-line-remove"
+        else if (line.startsWith("@@")) cls = "code-line-meta"
         return (
-          <div key={i} className={`px-4 py-px ${lineClass}`}>
-            {line || " "}
-          </div>
+          <div key={i} className={`px-4 py-px ${cls}`}>{line || " "}</div>
         )
       })}
     </div>
@@ -51,7 +48,6 @@ function DiffView({ diff }: { diff: string }) {
 
 export default function SuggestedFix() {
   const { token, selectedProjectId, selectedIssueId, selectedFixId, navigate, logout } = useNav()
-
   const [fix, setFix] = useState<ApiFixResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -60,10 +56,7 @@ export default function SuggestedFix() {
 
   useEffect(() => {
     if (!token) { logout(); return }
-    if (!selectedProjectId || !selectedFixId) {
-      setLoading(false)
-      return
-    }
+    if (!selectedProjectId || !selectedFixId) { setLoading(false); return }
     let cancelled = false
     setLoading(true)
     setError(null)
@@ -83,14 +76,11 @@ export default function SuggestedFix() {
     setActionLoading(true)
     setActionError(null)
     try {
-      const updated = await apiApproveFix(token, selectedProjectId, fix.id)
-      setFix(updated)
+      setFix(await apiApproveFix(token, selectedProjectId, fix.id))
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) { logout(); return }
       setActionError(err instanceof ApiError ? err.message : "Failed to approve fix")
-    } finally {
-      setActionLoading(false)
-    }
+    } finally { setActionLoading(false) }
   }
 
   async function handleReject() {
@@ -98,14 +88,11 @@ export default function SuggestedFix() {
     setActionLoading(true)
     setActionError(null)
     try {
-      const updated = await apiRejectFix(token, selectedProjectId, fix.id)
-      setFix(updated)
+      setFix(await apiRejectFix(token, selectedProjectId, fix.id))
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) { logout(); return }
       setActionError(err instanceof ApiError ? err.message : "Failed to reject fix")
-    } finally {
-      setActionLoading(false)
-    }
+    } finally { setActionLoading(false) }
   }
 
   async function handleDownload() {
@@ -122,24 +109,16 @@ export default function SuggestedFix() {
       a.click()
       a.remove()
       URL.revokeObjectURL(url)
-      // Reload fix to pick up applied status
-      const updated = await apiGetFix(token, selectedProjectId, fix.id)
-      setFix(updated)
+      setFix(await apiGetFix(token, selectedProjectId, fix.id))
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) { logout(); return }
       if (err instanceof ApiError && err.status === 409) {
         setActionError(err.message)
-        // Reload to pick up stale status
-        try {
-          const reloaded = await apiGetFix(token, selectedProjectId, fix.id)
-          setFix(reloaded)
-        } catch { /* ignore */ }
+        try { setFix(await apiGetFix(token, selectedProjectId, fix.id)) } catch {}
       } else {
         setActionError(err instanceof Error ? err.message : "Failed to download fix")
       }
-    } finally {
-      setActionLoading(false)
-    }
+    } finally { setActionLoading(false) }
   }
 
   const breadcrumb = fix?.target_file
@@ -148,27 +127,35 @@ export default function SuggestedFix() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center gap-2 text-xs text-gray-400 mb-4">
-        <button onClick={() => navigate("issues")} className="hover:text-blue-600 text-gray-500">Issues</button>
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-1.5 text-xs mb-4" style={{ color: "var(--xm-tx-muted)" }}>
+        <button onClick={() => navigate("issues")} className="transition-colors" style={{ color: "var(--xm-tx-secondary)" }}
+          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "var(--xm-accent)" }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "var(--xm-tx-secondary)" }}>
+          Findings
+        </button>
         {selectedIssueId && (
           <>
             <span>›</span>
-            <button onClick={() => navigate("issue-detail")} className="hover:text-blue-600 text-gray-500">Issue Detail</button>
+            <button onClick={() => navigate("issue-detail")} className="transition-colors" style={{ color: "var(--xm-tx-secondary)" }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "var(--xm-accent)" }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "var(--xm-tx-secondary)" }}>
+              Issue Detail
+            </button>
           </>
         )}
         <span>›</span>
-        <span className="text-gray-900">{breadcrumb}</span>
+        <span style={{ color: "var(--xm-tx-primary)" }}>{breadcrumb}</span>
       </div>
 
-      {/* Header */}
       <div className="flex items-start justify-between mb-5">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h2 className="text-xl font-semibold text-gray-900">Suggested Fix</h2>
-            {fix && <StatusBadge status={fix.status} />}
+            <h2 className="text-xl font-semibold tracking-tight" style={{ color: "var(--xm-tx-primary)" }}>Suggested Fix</h2>
+            {fix && <FixStatusBadge status={fix.status} />}
           </div>
           {fix?.model_provider && (
-            <p className="text-xs text-gray-400">
+            <p className="text-xs" style={{ color: "var(--xm-tx-muted)" }}>
               Generated by {fix.model_provider} · {fix.model_name}
             </p>
           )}
@@ -176,146 +163,135 @@ export default function SuggestedFix() {
       </div>
 
       {loading && (
-        <div className="text-sm text-gray-400 text-center py-12">Loading fix…</div>
+        <div className="space-y-4">
+          {[...Array(3)].map((_, i) => <div key={i} className="xm-skeleton h-32 rounded-lg" />)}
+        </div>
       )}
-
       {error && (
-        <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-4 py-3 mb-4">{error}</div>
+        <div className="text-sm rounded-lg px-4 py-3 mb-4" style={{ backgroundColor: "var(--xm-err-sub)", color: "var(--xm-err)", border: "1px solid color-mix(in srgb, var(--xm-err) 40%, transparent)" }}>
+          {error}
+        </div>
       )}
-
       {!loading && !error && !fix && (
-        <div className="text-sm text-gray-400 text-center py-12">
-          No fix selected. Go to an <button onClick={() => navigate("issue-detail")} className="text-blue-600 hover:underline">issue</button> and click Generate Fix.
+        <div className="text-sm text-center py-12" style={{ color: "var(--xm-tx-muted)" }}>
+          No fix selected. Go to an{" "}
+          <button onClick={() => navigate("issue-detail")} className="underline" style={{ color: "var(--xm-accent)" }}>issue</button>
+          {" "}and click Generate Fix.
         </div>
       )}
 
       {fix && (
         <div className="space-y-4">
-
-          {/* Source availability notice */}
           {!fix.source_available && (
-            <div className="bg-amber-50 border border-amber-200 rounded px-4 py-3 text-sm text-amber-800">
-              Source code was not available when this fix was generated. The proposal is based on the finding metadata only — verify carefully before applying.
+            <div className="px-4 py-3 text-sm rounded-lg" style={{ backgroundColor: "var(--xm-warn-sub)", color: "var(--xm-warn)", border: "1px solid color-mix(in srgb, var(--xm-warn) 40%, transparent)" }}>
+              Source code was not available when this fix was generated. The proposal is based on finding metadata only — verify carefully before applying.
             </div>
           )}
-
-          {/* Stale notice */}
           {fix.status === "stale" && (
-            <div className="bg-amber-50 border border-amber-200 rounded px-4 py-3 text-sm text-amber-800">
+            <div className="px-4 py-3 text-sm rounded-lg" style={{ backgroundColor: "var(--xm-warn-sub)", color: "var(--xm-warn)", border: "1px solid color-mix(in srgb, var(--xm-warn) 40%, transparent)" }}>
               This fix is stale — the source file changed after the fix was generated. Go back and generate a new fix.
             </div>
           )}
-
-          {/* Action error */}
           {actionError && (
-            <div className="bg-red-50 border border-red-200 rounded px-4 py-3 text-sm text-red-700">{actionError}</div>
+            <div className="px-4 py-3 text-sm rounded-lg" style={{ backgroundColor: "var(--xm-err-sub)", color: "var(--xm-err)", border: "1px solid color-mix(in srgb, var(--xm-err) 40%, transparent)" }}>
+              {actionError}
+            </div>
           )}
 
-          {/* Diff panel */}
-          <div className="bg-white border border-gray-200 rounded overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                Proposed Change
-                {fix.snippet_start_line && fix.snippet_end_line
-                  ? ` — Lines ${fix.snippet_start_line}–${fix.snippet_end_line}`
-                  : ""}
+          {/* Diff */}
+          <div
+            className="rounded-lg overflow-hidden"
+            style={{ border: "1px solid var(--xm-border)" }}
+          >
+            <div
+              className="px-4 py-2.5 flex items-center justify-between"
+              style={{ backgroundColor: "var(--xm-bg-elevated)", borderBottom: "1px solid var(--xm-border)" }}
+            >
+              <h3 className="text-[11px] font-semibold uppercase tracking-wider xm-section-label">
+                Proposed Change{fix.snippet_start_line && fix.snippet_end_line ? ` — Lines ${fix.snippet_start_line}–${fix.snippet_end_line}` : ""}
               </h3>
-              {fix.target_file && (
-                <span className="text-xs font-mono text-gray-400">{fix.target_file}</span>
-              )}
+              {fix.target_file && <span className="text-xs font-mono" style={{ color: "var(--xm-tx-muted)" }}>{fix.target_file}</span>}
             </div>
             {fix.unified_diff ? (
               <DiffView diff={fix.unified_diff} />
             ) : fix.proposed_snippet ? (
-              <pre className="text-xs font-mono p-4 bg-[#1e2329] text-[#abb2bf] overflow-x-auto leading-relaxed">
+              <pre className="text-xs font-mono p-4 overflow-x-auto leading-relaxed code-block">
                 {fix.proposed_snippet}
               </pre>
             ) : (
-              <div className="p-4 text-xs text-gray-400 italic">
-                No diff or proposed code is available for this fix.
-              </div>
+              <div className="p-4 text-xs italic" style={{ color: "var(--xm-tx-muted)" }}>No diff or proposed code available.</div>
             )}
           </div>
 
-          {/* Rationale and Caveats */}
+          {/* Rationale + Caveats */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white border border-gray-200 rounded p-4">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Rationale</h3>
-              <p className="text-sm text-gray-700 leading-relaxed">
-                {fix.rationale ?? "No rationale provided."}
-              </p>
-            </div>
-            <div className="bg-white border border-gray-200 rounded p-4">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Caveats</h3>
-              <p className="text-sm text-gray-700 leading-relaxed">
-                {fix.caveats ?? "No caveats noted."}
-              </p>
-            </div>
+            {[
+              { title: "Rationale", text: fix.rationale ?? "No rationale provided." },
+              { title: "Caveats", text: fix.caveats ?? "No caveats noted." },
+            ].map(({ title, text }) => (
+              <div
+                key={title}
+                className="rounded-lg p-4"
+                style={{ backgroundColor: "var(--xm-bg-surface)", border: "1px solid var(--xm-border)" }}
+              >
+                <h3 className="text-[11px] font-semibold uppercase tracking-wider mb-2 xm-section-label">{title}</h3>
+                <p className="text-sm leading-relaxed" style={{ color: "var(--xm-tx-secondary)" }}>{text}</p>
+              </div>
+            ))}
           </div>
 
-          {/* Action buttons */}
-          <div className="bg-white border border-gray-200 rounded p-4">
-            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Actions</h3>
-            <p className="text-xs text-gray-500 mb-4">
+          {/* Actions */}
+          <div
+            className="rounded-lg p-4"
+            style={{ backgroundColor: "var(--xm-bg-surface)", border: "1px solid var(--xm-border)" }}
+          >
+            <h3 className="text-[11px] font-semibold uppercase tracking-wider mb-2 xm-section-label">Actions</h3>
+            <p className="text-xs mb-4" style={{ color: "var(--xm-tx-muted)" }}>
               AI-generated fixes must be reviewed and explicitly approved before download. The original source files are never modified — you receive a ZIP with the patch applied.
             </p>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               {fix.status === "proposed" && (
                 <>
-                  <button
-                    onClick={handleApprove}
-                    disabled={actionLoading}
-                    className="px-4 py-1.5 bg-green-600 text-white rounded text-sm hover:bg-green-700 font-medium disabled:opacity-60"
-                  >
+                  <button onClick={handleApprove} disabled={actionLoading} className="xm-btn flex items-center gap-1.5 px-4 py-1.5 rounded text-sm font-medium" style={{ backgroundColor: "var(--xm-ok-sub)", color: "var(--xm-ok)", border: "1px solid color-mix(in srgb, var(--xm-ok) 40%, transparent)" }}>
+                    <CheckIcon className="w-4 h-4" />
                     {actionLoading ? "Saving…" : "Approve Fix"}
                   </button>
-                  <button
-                    onClick={handleReject}
-                    disabled={actionLoading}
-                    className="px-4 py-1.5 border border-red-300 text-red-700 rounded text-sm hover:bg-red-50 font-medium disabled:opacity-60"
-                  >
+                  <button onClick={handleReject} disabled={actionLoading} className="xm-btn xm-btn-secondary flex items-center gap-1.5 px-4 py-1.5 rounded text-sm font-medium" style={{ color: "var(--xm-err)", borderColor: "color-mix(in srgb, var(--xm-err) 40%, transparent)" }}>
+                    <XIcon className="w-4 h-4" />
                     Reject
                   </button>
                 </>
               )}
               {fix.status === "approved" && fix.source_available && (
                 <>
-                  <button
-                    onClick={handleDownload}
-                    disabled={actionLoading}
-                    className="px-4 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 font-medium disabled:opacity-60"
-                  >
+                  <button onClick={handleDownload} disabled={actionLoading} className="xm-btn xm-btn-primary">
                     {actionLoading ? "Preparing…" : "Download Patched ZIP"}
                   </button>
-                  <button
-                    onClick={handleReject}
-                    disabled={actionLoading}
-                    className="px-4 py-1.5 border border-gray-300 text-gray-700 rounded text-sm hover:bg-gray-50 disabled:opacity-60"
-                  >
-                    Reject
-                  </button>
+                  <button onClick={handleReject} disabled={actionLoading} className="xm-btn xm-btn-secondary">Reject</button>
                 </>
               )}
               {fix.status === "approved" && !fix.source_available && (
-                <p className="text-sm text-amber-700">
-                  Source not available — ZIP download is not possible for this fix. Apply the proposed changes manually using the diff above.
+                <p className="text-sm" style={{ color: "var(--xm-warn)" }}>
+                  Source not available — ZIP download is not possible. Apply the proposed changes manually using the diff above.
                 </p>
               )}
               {fix.status === "applied" && (
-                <p className="text-sm text-purple-700 font-medium">Fix applied — ZIP has been downloaded.</p>
+                <p className="text-sm font-medium" style={{ color: "var(--xm-accent)" }}>Fix applied — ZIP has been downloaded.</p>
               )}
               {fix.status === "rejected" && (
-                <p className="text-sm text-gray-500">This fix has been rejected.</p>
+                <p className="text-sm" style={{ color: "var(--xm-tx-muted)" }}>This fix has been rejected.</p>
               )}
               {fix.status === "stale" && (
-                <p className="text-sm text-amber-700">
-                  Fix is stale. Go back to <button onClick={() => navigate("issue-detail")} className="text-blue-600 hover:underline">the issue</button> and generate a new fix.
+                <p className="text-sm" style={{ color: "var(--xm-warn)" }}>
+                  Fix is stale. Go back to{" "}
+                  <button onClick={() => navigate("issue-detail")} className="underline" style={{ color: "var(--xm-accent)" }}>the issue</button>
+                  {" "}and generate a new fix.
                 </p>
               )}
             </div>
           </div>
 
-          <p className="text-xs text-gray-400">
+          <p className="text-xs" style={{ color: "var(--xm-tx-muted)" }}>
             AI-generated · Not verified by automated tests · Review all proposed changes before applying
           </p>
         </div>
