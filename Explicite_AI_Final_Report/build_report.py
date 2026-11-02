@@ -1682,6 +1682,7 @@ def references(doc):
         "[15] Snyk Ltd., \"Snyk Code Product Documentation,\" 2025. https://docs.snyk.io/products/snyk-code",
         "[16] GitHub, Inc., \"CodeQL Documentation,\" 2025. https://codeql.github.com/docs/",
         "[17] United Nations, \"Transforming our world: the 2030 Agenda for Sustainable Development,\" A/RES/70/1, 2015.",
+        "[18] D. Sharma et al., \"Explicite AI — AI-Powered Code Review and Learning Platform,\" Source code repository, VIT Vellore, 2026. https://github.com/DHRUVSHARMA2005/Explicite-AI",
     ]
     for ref in refs:
         p = doc.add_paragraph()
